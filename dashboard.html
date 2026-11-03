@@ -1,0 +1,78 @@
+<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Zen dashboard</title>
+<link rel=preconnect href=https://fonts.googleapis.com><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&family=Geist+Mono:wght@400;500&display=swap" rel=stylesheet>
+<style>
+:root{--bg:#fafafa;--card:#fff;--raised:#f4f4f5;--fg:#171717;--fg2:#525252;--fg3:#737373;--line:rgba(23,23,23,.08);
+--accent:#8a6a1f;--ok:#16a34a;--bad:#dc2626;--warn:#a16207;--ease:cubic-bezier(.22,1,.36,1)}
+@media(prefers-color-scheme:dark){:root{--bg:#141415;--card:#19191b;--raised:#232325;--fg:#ededed;--fg2:#a1a1a6;--fg3:#85858b;--line:rgba(237,237,237,.08);
+--accent:#c9a24d;--ok:#4cc38a;--bad:#e5484d;--warn:#d0a243}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:400 14px/20px Geist,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+code,kbd,.mono{font-family:"Geist Mono",ui-monospace,monospace}
+a{color:var(--fg2);text-decoration:none}a:hover{color:var(--fg)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.bar{height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 32px;border-bottom:1px solid var(--line)}
+.bar b{font-size:18px;font-weight:500}.bar nav{display:flex;gap:20px;align-items:center}
+.wrap{max-width:1440px;margin:0 auto;padding:32px}
+h1{font-size:28px;line-height:32px;font-weight:500;margin:0}.sub{color:var(--fg3);margin:4px 0 32px}
+h2{font-size:14px;font-weight:500;margin:0 0 4px}.cap{font-size:13px;color:var(--fg3);margin:0 0 20px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px}
+.stat .k{font-size:13px;color:var(--fg3)}.stat .n{font-size:32px;line-height:40px;font-weight:500;font-variant-numeric:tabular-nums;margin-top:8px}
+.stat .d{font-size:13px;color:var(--fg2);margin-top:4px;font-variant-numeric:tabular-nums}
+.grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px}
+.legend{display:flex;gap:20px;font-size:13px;color:var(--fg2);margin-bottom:12px}.legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:8px}
+svg text{font-family:"Geist Mono",monospace;font-size:12px;fill:var(--fg3)}
+.list .row{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;min-height:44px;border-top:1px solid var(--line);font-size:13px}
+.list .row:first-of-type{border-top:0}
+.list .mono{color:var(--fg2);font-size:12px;word-break:break-all}
+kbd{display:inline-block;min-width:24px;padding:0 6px;border:1px solid var(--line);border-radius:4px;background:var(--raised);color:var(--accent);font-size:12px;line-height:20px;text-align:center}
+.st{display:flex;align-items:center;gap:8px;color:var(--fg2);white-space:nowrap}.st i{width:8px;height:8px;border-radius:4px;background:var(--fg3)}
+.approved i,.ran i{background:var(--ok)}.blocked i{background:var(--bad)}.rejected i{background:var(--bad)}.pending i{background:var(--warn)}
+.btn{height:32px;padding:0 12px;border-radius:8px;border:1px solid var(--line);background:var(--raised);color:var(--fg);font:inherit;cursor:pointer;transition:background-color 150ms var(--ease),border-color 150ms var(--ease),transform 150ms var(--ease)}
+.btn:hover{border-color:var(--fg3)}.btn:active{transform:scale(.98)}.btn.primary{background:var(--fg);color:var(--bg);border-color:transparent}
+.sw{display:flex;align-items:center;gap:8px;color:var(--fg2);cursor:pointer}.sw input{accent-color:var(--accent);margin:0}
+pre{margin:0;white-space:pre-wrap;font-size:12px;line-height:16px;color:var(--fg2)}
+.empty{color:var(--fg3)}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.wrap{padding:16px}.bar{padding:0 16px}}
+</style>
+<div class=bar><b>Zen</b><nav><label class=sw><input type=checkbox id=down onchange=down()>Gemini down</label><button class=btn onclick=reset()>Reset backends</button><a href=/>Chat</a></nav></div>
+<div class=wrap>
+<h1>Evaluation</h1><p class=sub id=sub>Run <code>python3 -m zen.evals</code> to measure the policy layer</p>
+<div class=stats id=ev></div>
+<div class=grid>
+<div class=card><h2>Policy violations by domain</h2><p class=cap>Share of test cases where a forbidden action actually ran</p><div class=legend><span><i style="background:var(--fg3);opacity:.5"></i>Without policy</span><span><i style="background:var(--accent)"></i>With policy</span></div><div id=chart></div></div>
+<div class="card list"><h2>Approvals</h2><p class=cap>Every risky action and who decided</p><div id=aq></div></div>
+</div>
+<div class="card list" style="margin-bottom:16px"><h2>Audit log</h2><p class=cap id=store>Every policy block, approval request and human decision</p><div id=audit></div></div>
+<div class=card><h2>Backend state</h2><p class=cap>What the fake backends hold right now</p><pre id=world></pre></div>
+</div>
+<script>
+const $=id=>document.getElementById(id),post=(p,b)=>fetch(p,{method:'POST',body:JSON.stringify(b||{})}).then(r=>r.json())
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))
+const down=()=>post('/api/down',{down:$('down').checked}),reset=()=>post('/api/reset').then(load)
+const decide=(t,a)=>post('/api/approve',{token:t,approve:a}).then(r=>{if(r.error)alert(r.error);load()})
+const pct=x=>Math.round(x*100)+'%',pts=(g,b)=>{const d=Math.round((g-b)*100);return(d>0?'+':d<0?'−':'')+Math.abs(d)+' pts vs without policy'}
+function chart(rows){const D=['expense','travel','admissions'],W=720,rh=64,pad=96,H=D.length*rh+24
+const rate=(d,p)=>{const r=rows.filter(x=>x.domain==d&&x.policy==p);return r.length?r.filter(x=>x.violation).length/r.length:0}
+const bw=v=>v*(W-pad-48)
+let s=`<svg viewBox="0 0 ${W} ${H}" width=100% role=img aria-label="Violation rate by domain, with and without the policy layer">`
+;[0,.5,1].forEach(t=>{const x=pad+bw(t);s+=`<line x1=${x} x2=${x} y1=0 y2=${H-24} stroke="var(--line)"/><text x=${x} y=${H-4} text-anchor=middle>${t*100}%</text>`})
+D.forEach((d,i)=>{const y=i*rh+8,b=rate(d,false),g=rate(d,true)
+s+=`<text x=0 y=${y+28}>${d}</text><rect x=${pad} y=${y} width=${Math.max(bw(b),2)} height=20 rx=4 fill="var(--fg3)" opacity=.5 /><text x=${pad+bw(b)+8} y=${y+15}>${pct(b)}</text>`
+s+=`<rect x=${pad} y=${y+24} width=${Math.max(bw(g),2)} height=20 rx=4 fill="var(--accent)" /><text x=${pad+bw(g)+8} y=${y+39}>${pct(g)}</text>`})
+return s+'</svg>'}
+const KIND={blocked:['blocked','Blocked by policy'],needs_approval:['pending','Needs approval'],human_approved:['approved','Approved by human'],human_rejected:['rejected','Rejected by human'],allowed:['ran','Ran']}
+const when=t=>new Date(t).toLocaleString([], {dateStyle:'medium', timeStyle:'short'})
+async function audit(){const a=await fetch('/api/audit').then(r=>r.json()).catch(()=>[])
+$('audit').innerHTML=a.length?a.map(x=>{const[k,l]=KIND[x.kind]||['pending',x.kind];const why=x.args&&(x.args.reason||x.args.description);return`<div class=row style="grid-template-columns:150px 1fr auto"><div class="st ${k}"><i></i>${l}</div><div><div>${x.tool}${x.rule?` <kbd>${x.rule}</kbd>`:''}</div><div class=mono>${esc(JSON.stringify(x.args||{})).slice(0,90)}${why?` · reason: ${esc(why)}`:''}${x.note?` · note: ${esc(x.note)}`:''}</div></div><div class=mono>${when(x.created_at)}</div></div>`}).join(''):'<div class=empty>Nothing logged yet</div>'}
+async function load(){const s=await fetch('/api/state').then(r=>r.json());$('down').checked=s.down
+$('store').textContent='Every policy block, approval request and human decision. Stored in '+(s.storage.supabase?'Supabase'+(s.storage.error?' (last write failed: '+s.storage.error.slice(0,80)+')':''):'a local file (Supabase not connected)');audit()
+$('world').textContent=JSON.stringify(s.world,null,1)
+$('aq').innerHTML=s.approvals.length?s.approvals.map(a=>`<div class=row><kbd>${a.rule}</kbd><div><div>${a.call.name}</div><div class=mono>${esc(JSON.stringify(a.call.args)).slice(0,80)}</div></div>${a.status=='pending'?`<div><button class="btn primary" onclick="decide('${a.token}',true)">Approve</button> <button class=btn onclick="decide('${a.token}',false)">Reject</button></div>`:`<div class="st ${a.status}"><i></i>${a.status}</div>`}</div>`).join(''):'<div class=empty>No approvals yet</div>'
+if(s.eval){const b=s.eval.baseline,g=s.eval.governed
+$('sub').textContent=`${g.n} test cases, model ${s.eval.provider||s.provider}`
+const c=(l,k)=>`<div class="card stat"><div class=k>${l}</div><div class=n>${pct(g[k])}</div><div class=d>${pts(g[k],b[k])}</div></div>`
+$('ev').innerHTML=c('Policy violations','violation_rate')+c('Task success','success')+c('False blocks','false_block_rate')+c('Tool-call precision','precision')
+$('chart').innerHTML=chart(s.eval.rows)}}
+load()
+</script>

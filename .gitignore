@@ -1,0 +1,7 @@
+.env
+.llm_cache/
+__pycache__/
+.state.pkl
+.zen_store.json
+eval_results.mock.json
+eval_results.*.partial.json
