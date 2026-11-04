@@ -9,14 +9,12 @@
 .brsplit{display:flex;height:12px;border-radius:6px;overflow:hidden;background:var(--raised);margin:20px 0 12px}.brsplit i{display:block;height:100%;transition:width .3s}
 .brsplit .ok{background:var(--ok)}.brsplit .warn{background:var(--warn)}.brsplit .bad{background:var(--bad)}
 .brleg{display:flex;gap:32px;flex-wrap:wrap}.brleg .n{font-size:28px;line-height:36px;font-weight:600;font-variant-numeric:tabular-nums}.brleg .k{display:flex;align-items:center;gap:8px;color:var(--fg2);font-size:13px}.brleg .k i{width:8px;height:8px;border-radius:2px}
-.brhuman{position:absolute;left:0;right:0;top:16px;box-shadow:0 8px 24px rgba(30,23,27,.18);margin:0;padding:16px;border:1.5px solid var(--warn);border-radius:12px;background:var(--card);display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.brhuman{margin:12px 0 4px;padding:16px;border:1.5px solid var(--warn);border-radius:12px;background:var(--card);display:flex;gap:16px;align-items:center;flex-wrap:wrap}
 .brhuman .t{flex:1;min-width:240px}.brhuman .h{font-size:12px;font-weight:500;color:var(--warn)}.brhuman .x{margin-top:4px}.brhuman .w{font-size:13px;color:var(--fg2);margin-top:4px}
 .brhuman .a{display:flex;gap:8px}.brhuman .aiout{flex-basis:100%;font-size:13px;line-height:18px;color:var(--fg2)}.brhuman .aiout:empty{display:none}.brhuman .aiout b{color:var(--fg);font-weight:500}.brhuman .btn{height:36px;padding:0 16px}
 .brlive{margin-top:20px;border-top:1px solid var(--line)}
 /* fixed-size areas while a run is going, so nothing above the graph changes height and the page never shifts */
-.br.has .brlive{height:540px;overflow:hidden}.br.has #brSum{min-height:104px}/* the approval card floats over the top of the feed, so it takes no space of its own and leaves no gap */
-#brHuman{position:relative;height:0;z-index:6}
-.br *,.br{overflow-anchor:none}
+.br.has .brlive{height:540px;overflow:hidden}.br.has #brSum{min-height:104px}.br *,.br{overflow-anchor:none}
 .brtr{display:grid;grid-template-columns:72px minmax(0,1fr) 112px 160px minmax(0,1.1fr);gap:16px;align-items:center;min-height:48px;padding:8px 0;border-bottom:1px solid var(--line)}
 .brtr.h{min-height:40px;font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--fg2)}
 .brtr .id{color:var(--fg3);font-size:12px}.brtr .amt{text-align:right;font-variant-numeric:tabular-nums}.brtr .why{font-size:13px;color:var(--fg2)}.brtr .why kbd{margin-right:8px}
@@ -37,7 +35,7 @@
   mount.innerHTML = `<section class=br id=brSec>
 <div class=brc><button class="btn primary" id=brRun>Run</button><button class=btn id=brStop hidden>Stop</button>
 <label class=sw><input type=checkbox id=brPause checked>Pause for human approval</label><span class=note id=brNote></span></div>
-<div id=brSum></div><div id=brHuman></div><div class=brlive id=brLive></div><div id=brRes></div></section><div class=brtoasts id=brToasts aria-hidden=true></div>`
+<div id=brSum></div><div class=brlive id=brLive><div id=brHuman></div><div id=brRows></div></div><div id=brRes></div></section><div class=brtoasts id=brToasts aria-hidden=true></div>`
   const $ = id => document.getElementById(id), esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
   const IC = { allow: '<svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>', approve: '<svg viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.5v.01"/></svg>', deny: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>' }
   const LAB = { allow: 'Went through', approve: 'Needs approval', deny: 'Revoked', yes: 'Human approved', no: 'Human rejected', yesAI: 'Accepted using AI', noAI: 'Rejected using AI' }
@@ -63,7 +61,7 @@
   function settle(r, ok, by) {  // a human decided: update counters, the feed row and the audit log
     c.decided++; ok ? c.through++ : c.revoked++
     const el = r.el; if (el) { const p = el.querySelector('.verdict'); p.className = 'verdict ' + (ok ? 'allow' : 'deny'); p.innerHTML = IC[ok ? 'allow' : 'deny'] + LAB[(ok ? 'yes' : 'no') + (by === 'ai' ? 'AI' : '')] }
-    fetch('/api/batch/decide', { method: 'POST', body: JSON.stringify({ id: r.id, text: r.text, tool: r.tool, rule: r.rule, reason: r.reason, approve: ok, by }) }).catch(() => {})
+    fetch('/api/batch/decide', { method: 'POST', body: JSON.stringify({ id: r.id, text: r.text, tool: r.tool, rule: r.rule, reason: r.reason, amount: r.amount, approve: ok, by }) }).then(() => document.dispatchEvent(new Event('zen:decided'))).catch(() => {})
   }
   function ask(r) {
     waiting = r
@@ -81,9 +79,9 @@
     if (r.verdict === 'allow') c.through++; else if (r.verdict === 'deny') c.revoked++; else { c.human++; toast(r) }
     const row = document.createElement('div'); row.className = 'brtr'; row.innerHTML = rowHTML(r); r.el = row
     const wrap = document.createElement('div'); wrap.className = 'brw'; wrap.innerHTML = '<div class=in></div>'; wrap.firstChild.append(row)
-    $('brLive').prepend(wrap)  // the new row opens from zero height, so the rows below slide down instead of jumping
+    $('brRows').prepend(wrap)  // the new row opens from zero height, so the rows below slide down instead of jumping
     requestAnimationFrame(() => requestAnimationFrame(() => wrap.classList.add('open')))
-    const live = [...$('brLive').children].filter(x => !x.classList.contains('close'))
+    const live = [...$('brRows').children].filter(x => !x.classList.contains('close'))
     for (const old of live.slice(10)) { old.classList.add('close'); setTimeout(() => old.remove(), 500) }
     if (r.verdict === 'approve' && $('brPause').checked) ask(r)
     summary()
@@ -107,7 +105,7 @@
     $('brRun').disabled = true; $('brRun').textContent = 'Starting'
     $('brSec').classList.add('has', 'run')
     $('brRes').style.minHeight = $('brRes').offsetHeight + 'px'  // keep the old results' height until the run ends so the page below does not jump
-    $('brRes').innerHTML = ''; $('brLive').innerHTML = ''; $('brHuman').innerHTML = ''
+    $('brRes').innerHTML = ''; $('brRows').innerHTML = ''; $('brHuman').innerHTML = ''
     D = await fetch('/api/batch', { method: 'POST', body: JSON.stringify({ n: 2000 }) }).then(r => r.json()).catch(e => ({ error: String(e) }))
     if (D.error) { $('brNote').textContent = D.error; $('brRun').disabled = false; $('brRun').textContent = 'Run'; return }
     k = 0; waiting = null; c = { through: 0, revoked: 0, human: 0, decided: 0 }

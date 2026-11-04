@@ -93,15 +93,22 @@ S=s;$('ocap').textContent=ev.length?`Your chats: ${ev.length} events from the au
 document.addEventListener('zen:batch',e=>{const{k,n,c}=e.detail;if(k==0)S={ok:[0],bad:[0],warn:[0]};live=true
 const p={ok:c.through,bad:c.revoked,warn:c.human};for(const q in p){if(S[q].length>k)S[q][k]=p[q];else S[q].push(p[q])}
 $('ocap').textContent=`Batch run: scenario ${k} of ${n}. Approved includes human approvals, declined includes human rejections.`;lines(S,Math.max(k,20),k<=1)})
-async function audit(){const a=await fetch('/api/audit').then(r=>r.json()).catch(()=>[]);if(!live)fromAudit(a)
+let AUD=[],APP=[]
+function renderApprovals(){const WHO={human_approved:['approved','Approved by human'],human_rejected:['rejected','Rejected by human'],ai_approved:['approved','Accepted using AI'],ai_rejected:['rejected','Rejected using AI']}
+const pend=APP.filter(a=>a.status=='pending').map(a=>`<div class=row><kbd>${a.rule}</kbd><div><div>${a.call.name}</div><div class=mono>${esc(JSON.stringify(a.call.args)).slice(0,80)}</div></div><div><button class="btn primary" onclick="decide('${a.token}',true)">Approve</button> <button class=btn onclick="decide('${a.token}',false)">Reject</button></div></div>`)
+const done=AUD.filter(x=>WHO[x.kind]).slice(0,12).map(x=>{const[k,l]=WHO[x.kind],t=x.args&&(x.args.text||JSON.stringify(x.args));return`<div class=row><kbd>${esc(x.rule||'')}</kbd><div><div>${esc(x.tool||'')}</div><div class=mono>${esc(String(t||'')).slice(0,80)}</div></div><div class="st ${k}"><i></i>${l}</div></div>`})  // decisions come from the audit log, so batch-run and AI decisions show up too
+$('aq').innerHTML=pend.concat(done).join('')||'<div class=empty>No approvals yet</div>'}
+document.addEventListener('zen:decided',()=>setTimeout(()=>{audit();records(ST)},1800))
+async function audit(){const a=await fetch('/api/audit').then(r=>r.json()).catch(()=>[]);AUD=a;renderApprovals();if(!live)fromAudit(a)
 $('audit').innerHTML=a.length?a.slice(0,60).map(x=>{const[k,l]=KIND[x.kind]||['pending',x.kind];const why=x.args&&(x.args.reason||x.args.description);return`<div class=row style="grid-template-columns:150px 1fr auto"><div class="st ${k}"><i></i>${l}</div><div><div>${x.tool}${x.rule?` <kbd>${x.rule}</kbd>`:''}</div><div class=mono>${esc(JSON.stringify(x.args||{})).slice(0,90)}${why?` · reason: ${esc(why)}`:''}${x.note?` · note: ${esc(x.note)}`:''}</div></div><div class=mono>${when(x.created_at)}</div></div>`}).join(''):'<div class=empty>Nothing logged yet</div>'}
 async function records(s){const r=await fetch('/api/records').then(x=>x.json()).catch(()=>({items:[]}))
 const b=s.backends||{};$('recnote').textContent='Claims and payments that actually ran. '+(r.enabled?`Stored in DynamoDB (${r.table})`+(b.dynamodb_error?`, last write failed: ${b.dynamodb_error.slice(0,80)}`:''):'DynamoDB is off, so nothing is stored beyond this session')+'. Payments: '+(b.payments=='razorpay-test'?'Razorpay test mode':'simulated')
-$('rec').innerHTML=r.items.length?r.items.map(i=>`<div class=row style="grid-template-columns:90px 1fr auto"><div class="st ${i.kind=='payment'?'approved':'ran'}"><i></i>${i.kind=='payment'?'Payment':'Claim'}</div><div><div>${esc(i.summary||'')}</div><div class=mono>${esc(i.order||i.description||i.reason||'')}</div></div><div class=mono>${when(i.created_at)}</div></div>`).join(''):'<div class=empty>Nothing yet</div>'}
-async function load(){const s=await fetch('/api/state').then(r=>r.json())
+$('rec').innerHTML=r.items.length?r.items.map(i=>`<div class=row style="grid-template-columns:90px 1fr auto"><div class="st ${i.kind=='payment'?'approved':'ran'}"><i></i>${i.kind=='payment'?'Payment':i.kind=='booking'?'Booking':'Claim'}</div><div><div>${esc(i.summary||'')}</div><div class=mono>${esc(i.by?(i.by=='ai'?'Accepted using AI':'Approved by human')+(i.batch?' in a batch run':''):(i.order||i.description||i.reason||''))}</div></div><div class=mono>${when(i.created_at)}</div></div>`).join(''):'<div class=empty>Nothing yet</div>'}
+let ST={}
+async function load(){const s=await fetch('/api/state').then(r=>r.json());ST=s
 $('store').textContent='Every policy block, approval request and human decision. Stored in '+(s.storage.supabase?'Supabase'+(s.storage.error?' (last write failed: '+s.storage.error.slice(0,80)+')':''):'a local file (Supabase not connected)');audit()
 records(s)
-$('aq').innerHTML=s.approvals.length?s.approvals.map(a=>`<div class=row><kbd>${a.rule}</kbd><div><div>${a.call.name}</div><div class=mono>${esc(JSON.stringify(a.call.args)).slice(0,80)}</div></div>${a.status=='pending'?`<div><button class="btn primary" onclick="decide('${a.token}',true)">Approve</button> <button class=btn onclick="decide('${a.token}',false)">Reject</button></div>`:`<div class="st ${a.status}"><i></i>${a.status}</div>`}</div>`).join(''):'<div class=empty>No approvals yet</div>'
+APP=s.approvals;renderApprovals()
 if(s.eval){const b=s.eval.baseline,g=s.eval.governed
 $('sub').textContent=`${g.n} test cases, model ${s.eval.provider||s.provider}`
 const c=(l,k)=>`<div class="card stat"><div class=k>${l}</div><div class=n>${pct(g[k])}</div><div class=d>${pts(g[k],b[k])}</div></div>`
