@@ -147,6 +147,10 @@ def api(path, body, u):
     if path == "/api/batch/decide":
         store.log_audit(u, ("ai" if body.get("by") == "ai" else "human") + ("_approved" if body.get("approve") else "_rejected"), "batch", str(body.get("tool", "")), {"id": body.get("id"), "text": str(body.get("text", ""))[:200]},
                         str(body.get("rule", "")), str(body.get("reason", "")), "batch run")
+        if body.get("approve"):  # an approved batch scenario counts as executed, so it is recorded like a real claim, payment or booking
+            kind = dict(submit_claim="claim", send_payment="payment", book="booking").get(str(body.get("tool", "")))
+            if kind:
+                records.save(u["id"], kind, dict(by="ai" if body.get("by") == "ai" else "human", batch=True, amount=body.get("amount"), summary="Approved: " + str(body.get("text", ""))[:160]))
         return {}
     if path == "/api/batch":
         out = batch.run(max(1, min(int(body.get("n", 2000)), 2000)), body.get("seed"))
