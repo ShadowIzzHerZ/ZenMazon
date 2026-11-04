@@ -47,6 +47,7 @@ main{flex:1;display:flex;flex-direction:column;min-width:0}
 .seg button[aria-pressed=true]{background:var(--card);color:var(--fg);box-shadow:0 0 0 1px var(--line)}.seg button:disabled{opacity:.45;cursor:not-allowed}
 .top{gap:12px;padding:0 24px}@media(max-width:1100px){.pe{display:none!important}.sel{max-width:150px}}.top>b{margin-right:auto;white-space:nowrap}.sel{height:28px;padding:0 8px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg);font:500 12px/1 Inter,system-ui,sans-serif;cursor:pointer;max-width:220px}.sel[hidden]{display:none}
 .pe,.seg,.seg button{flex:none;white-space:nowrap}#prov{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aiout{font-size:13px;line-height:18px;color:var(--fg2)}.aiout:empty{display:none}.aiout b{color:var(--fg);font-weight:500}
 .pe{display:inline-flex;align-items:center;gap:8px;height:28px;padding:0 10px;border:1px solid var(--line);border-radius:6px;font-size:12px;color:var(--fg2)}.pe b{font-weight:500}
 .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.actions .btn{height:36px;padding:0 16px}
 .decided{color:var(--fg2);font-size:13px}
@@ -85,6 +86,8 @@ $('tasks').onclick=e=>{const b=e.target.closest('.task');b&&send(b.dataset.r)}
 const col=$('col');function add(h,c){const d=document.createElement('div');d.className=c;d.innerHTML=h;col.appendChild(d);$('log').scrollTop=1e9;return d}
 const lab={allow:'Allowed',deny:'Blocked',approve:'Needs approval'},IC={allow: `<svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>`, approve: `<svg viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.5v.01"/></svg>`, deny: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>`}
 const show=v=>esc(JSON.stringify(v)).slice(0,160)
+const PEND={}
+async function askAI(t){const p=PEND[t],o=$('ai'+t);if(!p||!o)return;o.innerHTML='<b>Ask AI</b> Thinking';const r=await post('/api/advise',{...p,engine});o.innerHTML='<b>Ask AI</b> '+esc(r.advice||r.error||'No answer')}
 function render(r,d){let h=''
 if(r.mode=='safe'){const why=/429/.test(r.error||'')?'has hit its rate limit':/503/.test(r.error||'')?'is overloaded':/404/.test(r.error||'')?'is set to a model that no longer exists':'is not responding';h+=`<div class=note>The AI model ${why}, so Zen is in safe mode. Nothing runs on its own.${r.trace.length?' The action below is a draft for a human.':''}<div class=args>${esc((r.error||'').slice(0,140))}</div></div>`}
 if(r.policy===false)h+='<div class=note>The policy layer is off. The agent can do anything.</div>'
@@ -93,7 +96,8 @@ const blocked=r.trace.filter(s=>s.verdict=='deny'&&!s.result?.error?.startsWith(
 const wait=r.status=='pending_approval'&&!d,deny=r.status=='blocked',ask=!r.trace.length&&r.message&&r.mode!='safe'
 if(r.message)h+=`<div class=msg>${esc(r.message)}</div>`
 h+=`<div class="final ${wait||ask?'wait':deny?'deny':''}" id=f${r.token||''}><i></i><span>${wait?'Waiting for human approval':d=='approved'?'Approved and executed':d=='rejected'?'Rejected by human':d=='expired'?'Approval expired':ask?'No action taken':r.mode=='safe'&&!r.trace.length?'Nothing was run':deny?'Blocked by policy':blocked?`Finished, ${blocked} call${blocked>1?'s':''} blocked`:'Finished'}</span></div>`
-if(r.token&&wait)h+=`<div class="actions approval" id=ap${r.token}><div class=ah>Human authorization required</div><div class=ar><input class=note-in id=nt${r.token} placeholder="Reason (optional)" aria-label="Reason for your decision"><button class="btn primary" onclick="dec('${r.token}',true)">Approve<kbd>A</kbd></button><button class=btn onclick="dec('${r.token}',false)">Reject<kbd>R</kbd></button></div></div>`
+if(r.token&&wait){const s=r.trace.find(x=>x.token==r.token)||r.trace[r.trace.length-1];PEND[r.token]={tool:s.call.name,args:s.call.args,rule:s.rule,reason:s.reason,text:r.request}}
+if(r.token&&wait)h+=`<div class="actions approval" id=ap${r.token}><div class=ah>Human authorization required</div><div class=ar><input class=note-in id=nt${r.token} placeholder="Reason (optional)" aria-label="Reason for your decision"><button class="btn primary" onclick="dec('${r.token}',true)">Approve<kbd>A</kbd></button><button class=btn onclick="dec('${r.token}',false)">Reject<kbd>R</kbd></button><button class=btn onclick="askAI('${r.token}')">Ask AI</button></div><div class=aiout id=ai${r.token}></div></div>`
 return h}
 async function send(t){if(!t.trim())return;if(!title)title=t;col.querySelector('.empty')?.remove();add(esc(t),'u');const w=add('<span class=decided>Working</span>','a')
 const r=await post('/api/run',{request:t,policy:true,history:hist,conv_id:conv,title,engine});w.innerHTML=r.error&&!r.trace?esc(r.error):render(r);$('log').scrollTop=1e9;active=true;modelLabel()
