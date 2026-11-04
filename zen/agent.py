@@ -68,12 +68,12 @@ def _drive(res, msgs, world, policy_on, approver, queue, t0, last=False):
     return _done(res, t0)
 
 
-def resume(token, ok, world):
+def resume(token, ok, world, by="human"):
     """Human decided. Run the approved action (or report the rejection), then let the agent carry on."""
-    rec = approvals.decide(token, ok)
+    rec = approvals.decide(token, ok, by)
     c = rec["call"]
     out = execute(world, c, True) if ok else {"error": "rejected by human"}
-    step = dict(call=c, verdict="allow" if ok else "deny", rule=rec["rule"], reason="Approved by human" if ok else "Rejected by human", result=out)
+    step = dict(call=c, verdict="allow" if ok else "deny", rule=rec["rule"], reason=f"Approved by {'AI' if by == 'ai' else 'human'}" if ok else f"Rejected by {'AI' if by == 'ai' else 'human'}", result=out)
     ctx = rec.get("ctx")
     res = dict(request=rec["ctx"]["request"] if ctx else "", policy=True, trace=[step], status="done", mode="normal", engine=ctx.get("engine", "cloud") if ctx else "cloud")
     if not ctx:  # safe-mode draft: nothing to continue

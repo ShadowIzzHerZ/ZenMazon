@@ -1,5 +1,5 @@
 """stdlib server: python3 server.py -> http://localhost:8000"""
-import base64, json, os, pickle, sys, time, urllib.error, urllib.parse, urllib.request
+import base64, json, os, pickle, re, sys, time, urllib.error, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from zen import agent, approvals, batch, llm, net, payments, records, store
 from zen.policy import RULES
@@ -92,7 +92,7 @@ def policy_impact(u, me):
     mine = {}
     for a in store.audit(u, 500):
         if a.get("rule"):
-            k = dict(blocked="blocked", needs_approval="asked", human_approved="approved", human_rejected="rejected").get(a["kind"])
+            k = dict(blocked="blocked", needs_approval="asked", human_approved="approved", human_rejected="rejected", ai_approved="approved", ai_rejected="rejected").get(a["kind"])
             if k:
                 mine.setdefault(a["rule"], dict(blocked=0, asked=0, approved=0, rejected=0))[k] += 1
     rules = [dict(id=i, text=t, verdict=v) for i, t, _, v, _ in RULES] + [dict(id="G2", text="Calls with the wrong arguments are denied", verdict="deny")]
@@ -119,12 +119,13 @@ def api(path, body, u):
     if path == "/api/approve":
         if body["token"] not in mine():
             raise ValueError("This approval is no longer valid (server restarted or backends reset)")
-        run = agent.resume(body["token"], body["approve"], W)
+        by = "ai" if body.get("by") == "ai" else "human"  # Ask AI can decide for the person
+        run = agent.resume(body["token"], body["approve"], W, by)
         RUNS.append(run)
         rec, note = approvals.QUEUE[body["token"]], str(body.get("note", ""))[:300]
         rec["note"] = note
         conv = rec.get("conv")
-        store.log_audit(u, "human_approved" if body["approve"] else "human_rejected", conv, rec["call"]["name"], rec["call"]["args"], rec["rule"], rec["reason"], note, body["token"])
+        store.log_audit(u, f"{by}_approved" if body["approve"] else f"{by}_rejected", conv, rec["call"]["name"], rec["call"]["args"], rec["rule"], rec["reason"], note, body["token"])
         store.set_decision(u, body["token"], rec["status"])
         if run.get("token") in approvals.QUEUE:
             approvals.QUEUE[run["token"]].update(conv=conv, uid=u["id"])
@@ -134,7 +135,9 @@ def api(path, body, u):
         prompt = (f"Action: {str(body.get('tool', ''))[:60]} {json.dumps(body.get('args', {}))[:400]}\nRequest: {str(body.get('text', ''))[:300]}\n"
                   f"Rule that flagged it: {str(body.get('rule', ''))[:20]} {str(body.get('reason', ''))[:200]}\nShould the human approve or reject this?")
         try:
-            return dict(advice=llm.advise(prompt, body.get("engine", "cloud")) or "No answer came back.")
+            text = llm.advise(prompt, body.get("engine", "cloud")) or "No answer came back."
+            m = re.match(r"\W*(approve|reject|unsure)", text, re.I)
+            return dict(advice=text, decision=m.group(1).lower() if m else "unsure")
         except llm.LLMDown as e:
             return dict(error="The AI could not answer: " + str(e)[:120])
     if path == "/api/records":
@@ -142,7 +145,7 @@ def api(path, body, u):
     if path == "/api/me":
         return dict(email=u["email"])
     if path == "/api/batch/decide":
-        store.log_audit(u, "human_approved" if body.get("approve") else "human_rejected", "batch", str(body.get("tool", "")), {"id": body.get("id"), "text": str(body.get("text", ""))[:200]},
+        store.log_audit(u, ("ai" if body.get("by") == "ai" else "human") + ("_approved" if body.get("approve") else "_rejected"), "batch", str(body.get("tool", "")), {"id": body.get("id"), "text": str(body.get("text", ""))[:200]},
                         str(body.get("rule", "")), str(body.get("reason", "")), "batch run")
         return {}
     if path == "/api/batch":
