@@ -1,5 +1,5 @@
 """stdlib server: python3 server.py -> http://localhost:8000"""
-import base64, json, os, pickle, time, urllib.error, urllib.parse, urllib.request
+import base64, json, os, pickle, sys, time, urllib.error, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from zen import agent, approvals, batch, llm, net, store
 from zen.policy import RULES
@@ -46,8 +46,9 @@ def user_of(headers):
         req = urllib.request.Request(os.environ["SUPABASE_URL"] + "/auth/v1/user", headers={"apikey": os.environ["SUPABASE_KEY"], "Authorization": "Bearer " + tok})
         d = json.loads(net.urlopen(req, timeout=10).read())
         u = dict(id=d["id"], email=d.get("email", ""), jwt=tok)
-    except urllib.error.HTTPError:
-        return None  # Supabase rejected the token
+    except urllib.error.HTTPError as e:
+        print(f"session rejected by Supabase: HTTP {e.code} {e.read()[:160]!r}", file=sys.stderr, flush=True)
+        return None
     except Exception as e:
         raise ConnectionError(f"Could not reach Supabase to check your session: {e}")
     _users[tok] = (time.time() + 60, u)
@@ -93,6 +94,8 @@ def api(path, body, u):
             approvals.QUEUE[run["token"]].update(conv=conv, uid=u["id"])
         log_steps(u, conv, run, skip_first=True)
         return {"status": rec["status"], "run": run}
+    if path == "/api/me":
+        return dict(email=u["email"])
     if path == "/api/batch":
         return batch.run(max(1, min(int(body.get("n", 500)), 1000)), body.get("seed"))
     if path == "/api/down":
