@@ -68,6 +68,31 @@ def log_steps(u, conv, r, skip_first=False):
             store.log_audit(u, "allowed", conv, c["name"], c["args"])
 
 
+def policy_impact(u, me):
+    """How often each rule has fired: in the 30 test cases, in the latest batch run, and in this user's own audit log."""
+    def fires(d):
+        return dict(blocked=d.get("deny", 0), asked=d.get("approve", 0))
+    evals = {}
+    ev = next((json.load(open(f)) for f in ("eval_results.json", "eval_results.groq.json") if os.path.exists(f)), None)
+    for row in (ev or {}).get("rows", []):
+        if row["policy"]:
+            for s in row["trace"]:
+                if s.get("rule") and s["verdict"] in ("deny", "approve"):
+                    evals.setdefault(s["rule"], {}).setdefault(s["verdict"], 0)
+                    evals[s["rule"]][s["verdict"]] += 1
+    mine = {}
+    for a in store.audit(u, 500):
+        if a.get("rule"):
+            k = dict(blocked="blocked", needs_approval="asked", human_approved="approved", human_rejected="rejected").get(a["kind"])
+            if k:
+                mine.setdefault(a["rule"], dict(blocked=0, asked=0, approved=0, rejected=0))[k] += 1
+    rules = [dict(id=i, text=t, verdict=v) for i, t, _, v, _ in RULES] + [dict(id="G2", text="Calls with the wrong arguments are denied", verdict="deny")]
+    for r in rules:
+        r["tests"], r["batch"] = fires(evals.get(r["id"], {})), fires(me.get("batch_rules", {}).get(r["id"], {}))
+        r["chats"] = mine.get(r["id"], dict(blocked=0, asked=0, approved=0, rejected=0))
+    return dict(rules=rules, has_batch=bool(me.get("batch_rules")), has_tests=bool(ev))
+
+
 def api(path, body, u):
     me = S.setdefault(u["id"], dict(W=World(), RUNS=[]))
     W, RUNS = me["W"], me["RUNS"]
@@ -105,7 +130,13 @@ def api(path, body, u):
                         str(body.get("rule", "")), str(body.get("reason", "")), "batch run")
         return {}
     if path == "/api/batch":
-        return batch.run(max(1, min(int(body.get("n", 1000)), 1000)), body.get("seed"))
+        out = batch.run(max(1, min(int(body.get("n", 1000)), 1000)), body.get("seed"))
+        me["batch_rules"] = {}
+        for x in out["rows"]:
+            if x["rule"]:
+                me["batch_rules"].setdefault(x["rule"], {}).setdefault(x["verdict"], 0)
+                me["batch_rules"][x["rule"]][x["verdict"]] += 1
+        return out
     if path == "/api/down":
         llm.DOWN = body["down"]
         return {"down": llm.DOWN}
@@ -114,6 +145,8 @@ def api(path, body, u):
         for t in mine():
             del approvals.QUEUE[t]
         return {}
+    if path == "/api/policy-impact":
+        return policy_impact(u, me)
     if path == "/api/policies":
         return [dict(id=i, text=e, tool=t, verdict=v) for i, e, t, v, _ in RULES]
     if path == "/api/conversations":
@@ -151,7 +184,7 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, open(self.path[1:], "rb").read(), "text/css" if self.path.endswith("css") else "text/javascript")
         if self.path.split("?")[0] == "/batch":  # the batch run now lives on the dashboard
             self.send_response(302); self.send_header("Location", "/dashboard"); self.end_headers(); return
-        page = {"/app": "chat.html", "/dashboard": "dashboard.html"}.get(self.path.split("?")[0], "landing.html")
+        page = {"/app": "chat.html", "/dashboard": "dashboard.html", "/policies": "policies.html"}.get(self.path.split("?")[0], "landing.html")
         self._send(200, open(page, "rb").read(), "text/html")
 
     def do_POST(self):
