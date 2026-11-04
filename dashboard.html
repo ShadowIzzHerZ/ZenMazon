@@ -46,7 +46,7 @@ pre{margin:0;white-space:pre-wrap;font-size:12px;line-height:16px;color:var(--fg
 <h1>Evaluation</h1><p class=sub id=sub>Run <code>python3 -m zen.evals</code> to measure the policy layer</p>
 <div class=stats id=ev></div>
 <div class=grid>
-<div class=card><h2>Policy violations by domain</h2><p class=cap>Share of test cases where a forbidden action actually ran</p><div class=legend><span><i style="background:var(--fg3);opacity:.5"></i>Without policy</span><span><i style="background:var(--accent)"></i>With policy</span></div><div id=chart></div></div>
+<div class=card><h2 id=vt>Policy violations by domain</h2><p class=cap id=vc>Share of test cases where a forbidden action actually ran</p><div class=legend><span><i style="background:var(--fg3);opacity:.5"></i>Without policy</span><span><i style="background:var(--accent)"></i>With policy</span></div><div id=chart></div></div>
 <div class="card list"><h2>Approvals</h2><p class=cap>Every risky action and who decided</p><div id=aq></div></div>
 </div>
 <div class="card list" style="margin-bottom:16px"><h2>Executed actions</h2><p class=cap id=recnote>Claims and payments that actually ran, kept in DynamoDB</p><div id=rec></div></div>
@@ -59,6 +59,23 @@ const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[
 const reset=()=>post('/api/reset').then(load)
 const decide=(t,a)=>post('/api/approve',{token:t,approve:a}).then(r=>{if(r.error)alert(r.error);load()})
 const pct=x=>Math.round(x*100)+'%',pts=(g,b)=>{const d=Math.round((g-b)*100);return(d>0?'+':d<0?'−':'')+Math.abs(d)+' pts vs without policy'}
+let vcur=null,vtgt=null,vraf=0
+const VD=[['claim','expenses'],['payment','payments'],['booking','travel']]
+function liveBars(by,k,n,instant){const mx=Math.max(...VD.map(([q])=>by[q].b)),ax=Math.max(5,Math.ceil(mx/5)*5)
+vtgt={ax,v:Object.fromEntries(VD.map(([q])=>[q,{b:by[q].b,g:by[q].g}]))}
+$('vt').textContent='Violations in this batch run';$('vc').textContent=`Forbidden actions seen so far, ${k} of ${n} scenarios. Grey would have run without the policy layer, pink ran anyway.`
+if(!vcur||instant){vcur={ax:vtgt.ax,v:JSON.parse(JSON.stringify(vtgt.v))};paintBars();return}
+if(!vraf)vraf=requestAnimationFrame(stepBars)}
+function stepBars(){vraf=0;let mv=false;const e=(a,b)=>{const d=b-a;if(Math.abs(d)<.01)return b;mv=true;return a+d*.14}
+vcur.ax=e(vcur.ax,vtgt.ax);for(const[q]of VD){vcur.v[q].b=e(vcur.v[q].b,vtgt.v[q].b);vcur.v[q].g=e(vcur.v[q].g,vtgt.v[q].g)}
+paintBars();if(mv)vraf=requestAnimationFrame(stepBars)}
+function paintBars(){const W=720,rh=64,pad=96,H=VD.length*rh+24,bw=v=>v/vcur.ax*(W-pad-48)
+let s=`<svg viewBox="0 0 ${W} ${H}" width=100% role=img aria-label="Forbidden actions per domain in the batch run, with and without the policy layer">`
+;[0,.5,1].forEach(t=>{const x=pad+bw(vcur.ax*t);s+=`<line x1=${x} x2=${x} y1=0 y2=${H-24} stroke="var(--line)"/><text x=${x} y=${H-4} text-anchor=middle>${Math.round(vcur.ax*t)}</text>`})
+VD.forEach(([q,name],i)=>{const y=i*rh+8,v=vcur.v[q]
+s+=`<text x=0 y=${y+28}>${name}</text><rect x=${pad} y=${y} width=${Math.max(bw(v.b),2)} height=20 rx=4 fill="var(--fg3)" opacity=.5 /><text x=${pad+bw(v.b)+8} y=${y+15}>${Math.round(v.b)}</text>`
+s+=`<rect x=${pad} y=${y+24} width=${Math.max(bw(v.g),2)} height=20 rx=4 fill="var(--accent)" /><text x=${pad+bw(v.g)+8} y=${y+39}>${Math.round(v.g)}</text>`})
+$('chart').innerHTML=s+'</svg>'}
 function chart(rows){const D=['expense','travel','admissions'],W=720,rh=64,pad=96,H=D.length*rh+24
 const rate=(d,p)=>{const r=rows.filter(x=>x.domain==d&&x.policy==p);return r.length?r.filter(x=>x.violation).length/r.length:0}
 const bw=v=>v*(W-pad-48)
@@ -95,7 +112,7 @@ ev.forEach(x=>{if(x.kind=='allowed'||x.kind=='human_approved'||x.kind=='ai_appro
 S=s;$('ocap').textContent=ev.length?`Your chats: ${ev.length} events from the audit log, oldest to newest. Run the batch to watch it grow live.`:'No activity yet. Send a chat message or press Run and the lines start growing.';lines(S,Math.max(ev.length,10),true)}
 document.addEventListener('zen:batch',e=>{const{k,n,c}=e.detail;if(k==0)S={ok:[0],bad:[0],warn:[0]};live=true
 const p={ok:c.through,bad:c.revoked,warn:c.human};for(const q in p){if(S[q].length>k)S[q][k]=p[q];else S[q].push(p[q])}
-$('ocap').textContent=`Batch run: scenario ${k} of ${n}. Approved includes human approvals, declined includes human rejections.`;lines(S,Math.max(k,20),k<=1)})
+$('ocap').textContent=`Batch run: scenario ${k} of ${n}. Approved includes human approvals, declined includes human rejections.`;lines(S,Math.max(k,20),k<=1);liveBars(c.by,k,n,k<=1)})
 let AUD=[],APP=[]
 const readable=(t,a)=>{a=a||{};return a.text||(t=='send_payment'?`Pay Rs ${a.amount} to ${a.recipient}${a.reason&&a.reason!='not given'?' for '+a.reason:''}`:t=='submit_claim'?`Claim Rs ${a.amount} for ${a.description||'an expense'} at ${a.vendor}`:t=='book'?`Book option ${a.option_id}`:t=='cancel'?`Cancel booking ${a.booking_id}`:JSON.stringify(a))}
 function renderApprovals(){const WHO={human_approved:['approved','Approved by human'],human_rejected:['rejected','Rejected by human'],ai_approved:['approved','Accepted using AI'],ai_rejected:['rejected','Rejected using AI']}
