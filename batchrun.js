@@ -16,6 +16,10 @@
 /* fixed-size areas while a run is going, so nothing above the graph changes height and the page never shifts */
 .br.has .brlive{height:540px;overflow:hidden}.br.has #brSum{min-height:104px}.br *,.br{overflow-anchor:none}
 .brtr{display:grid;grid-template-columns:72px minmax(0,1fr) 112px 160px minmax(0,1.1fr);gap:16px;align-items:center;min-height:48px;padding:8px 0;border-bottom:1px solid var(--line)}
+.brtr .mono{font-family:inherit;font-variant-numeric:tabular-nums}
+.brtr.act{grid-template-columns:72px minmax(0,1fr) 112px 160px minmax(0,1fr) 236px}
+.racts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}.racts .btn{height:32px;padding:0 12px;font-size:13px}
+.rai{grid-column:1/-1;font-size:13px;line-height:18px;color:var(--fg2);padding-bottom:4px}.rai:empty{display:none}.rai b{color:var(--fg);font-weight:500}
 .brtr.h{min-height:40px;font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--fg2)}
 .brtr .id{color:var(--fg3);font-size:12px}.brtr .amt{text-align:right;font-variant-numeric:tabular-nums}.brtr .why{font-size:13px;color:var(--fg2)}.brtr .why kbd{margin-right:8px}
 .brw{display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows .45s var(--ease),opacity .45s var(--ease)}
@@ -52,7 +56,7 @@
 <div class=brleg><div><div class=k><i style="background:var(--ok)"></i>Went through</div><div class=n>${w}</div></div><div><div class=k><i style="background:var(--bad)"></i>Revoked</div><div class=n>${v}</div></div>
 <div><div class=k><i style="background:var(--warn)"></i>Asked a human</div><div class=n>${c.human}</div></div><div><div class=k>Scenario</div><div class=n>${k}<span style="color:var(--fg3);font-size:16px"> / ${n}</span></div></div></div>`
   }
-  const rowHTML = r => `<span class="id mono">${r.id}</span><span>${esc(r.text)}</span><span class="amt mono">${rs(r.amount)}</span><span class="verdict ${r.verdict}">${IC[r.verdict]}${LAB[r.verdict]}</span><span class=why>${r.rule ? `<kbd>${r.rule}</kbd>${esc(r.reason)}` : 'No rule applies'}</span>`
+  const rowHTML = r => { const d = r.decision, cls = d ? (d.startsWith('yes') ? 'allow' : 'deny') : r.verdict; return `<span class="id mono">${r.id}</span><span>${esc(r.text)}</span><span class="amt mono">${rs(r.amount)}</span><span class="verdict ${cls}">${IC[cls]}${d ? LAB[d] : LAB[r.verdict]}</span><span class=why>${r.rule ? `<kbd>${r.rule}</kbd>${esc(r.reason)}` : 'No rule applies'}</span>` }
   function toast(r) {
     const box = $('brToasts'); while (box.children.length >= 3) box.firstChild.remove()
     const d = document.createElement('div'); d.className = 'brtoast'; d.innerHTML = `<span class=m>Needs approval</span><span class=t>${esc(r.text)}</span>`; box.appendChild(d)
@@ -60,6 +64,7 @@
   }
   function settle(r, ok, by) {  // a human decided: update counters, the feed row and the audit log
     c.decided++; ok ? c.through++ : c.revoked++
+    r.decision = (ok ? 'yes' : 'no') + (by === 'ai' ? 'AI' : '')
     const el = r.el; if (el) { const p = el.querySelector('.verdict'); p.className = 'verdict ' + (ok ? 'allow' : 'deny'); p.innerHTML = IC[ok ? 'allow' : 'deny'] + LAB[(ok ? 'yes' : 'no') + (by === 'ai' ? 'AI' : '')] }
     fetch('/api/batch/decide', { method: 'POST', body: JSON.stringify({ id: r.id, text: r.text, tool: r.tool, rule: r.rule, reason: r.reason, amount: r.amount, approve: ok, by }) }).then(() => document.dispatchEvent(new Event('zen:decided'))).catch(() => {})
   }
@@ -90,7 +95,9 @@
   function table() {
     const rows = seen().filter(r => inTab(r, tab))
     $('brTabs').innerHTML = TABS.map(([t, l]) => `<button role=tab aria-selected=${t === tab} data-t=${t}>${l}<b>${seen().filter(r => inTab(r, t)).length}</b></button>`).join('')
-    $('brTbl').innerHTML = rows.length ? `<div class="brtr h"><span>ID</span><span>Scenario</span><span style="text-align:right">Amount</span><span>Outcome</span><span>Rule</span></div>` + rows.slice(0, shown).map(r => `<div class=brtr>${rowHTML(r)}</div>`).join('') + (rows.length > shown ? `<button class=btn id=brMore style="margin-top:16px">Show ${Math.min(100, rows.length - shown)} more</button>` : '') : '<div style="color:var(--fg3);padding:24px 0">Nothing here</div>'
+    const act = tab === 'approve'  // scenarios that asked for a human can be decided here too
+    const acts = r => r.decision ? '' : `<span class=racts><button class="btn primary" data-a=yes data-id=${r.id}>Approve</button><button class=btn data-a=no data-id=${r.id}>Reject</button><button class=btn data-a=ai data-id=${r.id}>Ask AI</button></span>`
+    $('brTbl').innerHTML = rows.length ? `<div class="brtr h${act ? ' act' : ''}"><span>ID</span><span>Scenario</span><span style="text-align:right">Amount</span><span>Outcome</span><span>Rule</span>${act ? '<span></span>' : ''}</div>` + rows.slice(0, shown).map(r => `<div class="brtr${act ? ' act' : ''}">${rowHTML(r)}${act ? acts(r) + `<span class=rai id=rai${r.id}></span>` : ''}</div>`).join('') + (rows.length > shown ? `<button class=btn id=brMore style="margin-top:16px">Show ${Math.min(100, rows.length - shown)} more</button>` : '') : '<div style="color:var(--fg3);padding:24px 0">Nothing here</div>'
     if ($('brMore')) $('brMore').onclick = () => { shown += 100; table() }
   }
   function finish(stopped) {
@@ -100,7 +107,17 @@
     $('brNote').textContent = (stopped ? 'Stopped' : 'Finished') + ' at ' + k + ' of ' + D.n + '. Seed ' + D.seed
     $('brRes').innerHTML = `<div class=brscore>Of the <b>${bad.length}</b> planted violations seen, the rules caught <b>${caught}</b> and missed <b>${bad.length - caught}</b>.</div><div class=brtabs id=brTabs role=tablist></div><div id=brTbl></div>`
     tab = 'deny'; shown = 60; table()
-    $('brRes').onclick = e => { const b = e.target.closest('[data-t]'); if (b) { tab = b.dataset.t; shown = 60; table() } }
+    $('brRes').onclick = async e => {
+      const b = e.target.closest('[data-t]'); if (b) { tab = b.dataset.t; shown = 60; table(); return }
+      const a = e.target.closest('[data-a]'); if (!a) return
+      const r = D.rows.find(x => x.id === a.dataset.id), out = $('rai' + r.id), decide = (ok, by) => { settle(r, ok, by); summary(); table() }
+      if (a.dataset.a !== 'ai') return decide(a.dataset.a === 'yes', 'human')
+      out.innerHTML = '<b>Ask AI</b> Thinking'
+      const x = await fetch('/api/advise', { method: 'POST', body: JSON.stringify({ tool: r.tool, text: r.text, rule: r.rule, reason: r.reason, args: { amount: r.amount } }) }).then(y => y.json()).catch(err => ({ error: String(err) }))
+      out.innerHTML = '<b>Ask AI</b> ' + esc(x.advice || x.error || 'No answer')
+      if (x.decision === 'approve' || x.decision === 'reject') { await new Promise(y => setTimeout(y, 1200)); decide(x.decision === 'approve', 'ai') }
+      else if (x.advice) out.innerHTML += ' <b>The AI is not sure, so the decision is yours.</b>'
+    }
   }
   $('brRun').onclick = async () => {
     $('brRun').disabled = true; $('brRun').textContent = 'Starting'
