@@ -76,6 +76,7 @@
     if (waiting) return
     if (k >= D.n) return finish()
     const r = D.rows[k++]
+    if (r.expected === 'deny') { c.by[r.kind].b++; if (r.verdict !== 'deny') c.by[r.kind].g++ }  // b: would have run without the policy layer, g: ran anyway
     if (r.verdict === 'allow') c.through++; else if (r.verdict === 'deny') c.revoked++; else { c.human++; toast(r) }
     const row = document.createElement('div'); row.className = 'brtr'; row.innerHTML = rowHTML(r); r.el = row
     const wrap = document.createElement('div'); wrap.className = 'brw'; wrap.innerHTML = '<div class=in></div>'; wrap.firstChild.append(row)
@@ -108,7 +109,7 @@
     $('brRes').innerHTML = ''; $('brRows').innerHTML = ''; $('brHuman').innerHTML = ''
     D = await fetch('/api/batch', { method: 'POST', body: JSON.stringify({ n: 2000 }) }).then(r => r.json()).catch(e => ({ error: String(e) }))
     if (D.error) { $('brNote').textContent = D.error; $('brRun').disabled = false; $('brRun').textContent = 'Run'; return }
-    k = 0; waiting = null; c = { through: 0, revoked: 0, human: 0, decided: 0 }
+    k = 0; waiting = null; c = { through: 0, revoked: 0, human: 0, decided: 0, by: { claim: { b: 0, g: 0 }, payment: { b: 0, g: 0 }, booking: { b: 0, g: 0 } } }
     $('brRun').textContent = 'Running'; $('brStop').hidden = false; $('brNote').textContent = ''
     summary(); timer = setInterval(tick, 500)  // two scenarios a second
   }
