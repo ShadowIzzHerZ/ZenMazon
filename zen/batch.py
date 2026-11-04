@@ -82,7 +82,7 @@ def _booking(r, plant):
 GEN = dict(claim=_claim, payment=_payment, booking=_booking)
 
 
-def run(n=500, seed=None):
+def run(n=1000, seed=None):
     seed = int(seed if seed is not None else time.time()) % 10_000_000
     r = random.Random(seed)
     kinds = []
@@ -95,7 +95,7 @@ def run(n=500, seed=None):
     for i, (kind, plant, exp) in enumerate(kinds[:n], 1):
         text, amount, tool, args, world = GEN[kind](r, plant)
         d = decide(tool, args, world)
-        rows.append(dict(id=f"TX-{i:03d}", kind=kind, text=text, amount=amount, verdict=d.verdict, rule=d.rule, reason=d.reason, expected=exp, plant=plant, ok=d.verdict == exp))
+        rows.append(dict(id=f"TX-{i:03d}", kind=kind, tool=tool, text=text, amount=amount, verdict=d.verdict, rule=d.rule, reason=d.reason, expected=exp, plant=plant, ok=d.verdict == exp))
     bad = [x for x in rows if x["expected"] == "deny"]
     return dict(seed=seed, n=len(rows), rows=rows,
                 counts={v: sum(x["verdict"] == v for x in rows) for v in ("allow", "approve", "deny")},
