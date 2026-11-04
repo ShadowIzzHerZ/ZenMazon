@@ -1,0 +1,26 @@
+/* Zen Enterprise Governance tokens (from the Stitch design system). Shared by landing, chat and dashboard. */
+:root{--side:#fff;--bg:#faf8f9;--card:#fff;--raised:#f5eff2;--fg:#1e171b;--fg2:#5e5157;--fg3:#7a6b72;--line:#ebdce2;--line-strong:#d9c2cb;
+--accent:#b82e66;--accent-hover:#a02456;--on-accent:#fff;
+--ok:#1e7e48;--ok-bg:#ebf7f0;--ok-bd:#bbf0cf;--warn:#b45309;--warn-bg:#fef6eb;--warn-bd:#fde0b2;--bad:#b91c1c;--bad-bg:#fdf0f0;--bad-bd:#fecaca;--info:#2563eb;--info-bg:#eff4ff;
+--ease:cubic-bezier(.22,1,.36,1)}
+@media(prefers-color-scheme:dark){:root:not([data-theme]){--side:#1a1418;--bg:#120e11;--card:#1a1418;--raised:#231c21;--fg:#fcf9fa;--fg2:#a6959e;--fg3:#85747d;--line:#2f242b;--line-strong:#42343d;
+--accent:#f08ab4;--accent-hover:#f4a3c4;--on-accent:#120e11;
+--ok:#3ddc84;--ok-bg:#0d2716;--ok-bd:#1b4a2c;--warn:#fbbf24;--warn-bg:#2e1b04;--warn-bd:#5a3a0a;--bad:#f87171;--bad-bg:#310909;--bad-bd:#5c1a1a;--info:#60a5fa;--info-bg:#0a1c3d}}
+:root[data-theme=dark]{--side:#1a1418;--bg:#120e11;--card:#1a1418;--raised:#231c21;--fg:#fcf9fa;--fg2:#a6959e;--fg3:#85747d;--line:#2f242b;--line-strong:#42343d;
+--accent:#f08ab4;--accent-hover:#f4a3c4;--on-accent:#120e11;
+--ok:#3ddc84;--ok-bg:#0d2716;--ok-bd:#1b4a2c;--warn:#fbbf24;--warn-bg:#2e1b04;--warn-bd:#5a3a0a;--bad:#f87171;--bad-bg:#310909;--bad-bd:#5c1a1a;--info:#60a5fa;--info-bg:#0a1c3d}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+body{font-feature-settings:"tnum" 1,"cv05" 1,"cv08" 1,"cv02" 1}
+.btn.primary,.btn.primary:hover{border-color:transparent}
+.btn.primary{background:var(--accent);color:var(--on-accent);box-shadow:none}.btn.primary:hover{background:var(--accent-hover);color:var(--on-accent)}
+.mark{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:8px;background:var(--accent);color:var(--on-accent);flex:none}
+.mark svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.verdict,.v{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:9999px;border:1px solid var(--line);font-size:12px;font-weight:500;line-height:16px;white-space:nowrap;color:var(--fg2)}
+.verdict svg,.v svg{width:12px;height:12px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.verdict.allow,.v.allow{color:var(--ok);background:var(--ok-bg);border-color:var(--ok-bd)}
+.verdict.approve,.v.approve{color:var(--warn);background:var(--warn-bg);border-color:var(--warn-bd)}
+.verdict.deny,.v.deny{color:var(--bad);background:var(--bad-bg);border-color:var(--bad-bd)}
+.tt{width:32px;height:32px;display:inline-grid;place-items:center;flex:none;padding:0;border:1px solid var(--line);border-radius:8px;background:var(--raised);color:var(--fg2);cursor:pointer;transition:border-color 150ms var(--ease)}
+.tt:hover{border-color:var(--fg3);color:var(--fg)}
+.tt svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+.tt .sun{display:none}[data-theme=dark] .tt .sun{display:block}[data-theme=dark] .tt .moon{display:none}
