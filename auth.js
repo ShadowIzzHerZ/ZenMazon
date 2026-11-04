@@ -64,7 +64,7 @@ AUTH.config().then(c => {
   av.setAttribute('aria-haspopup', 'menu'); av.setAttribute('aria-expanded', 'false'); av.setAttribute('aria-label', 'Account menu'); av.title = email
   const menu = mk('div', 'menu'); menu.hidden = true; menu.setAttribute('role', 'menu')
   const who = mk('div', 'who'); who.append(mk('small', '', 'Signed in as'), mk('b', '', email)); menu.append(who)
-  for (const [t, h] of [['Chat', '/app'], ['Dashboard', '/dashboard'], ['Policies', '/policies']]) { const a = mk('a', '', t); a.href = h; a.setAttribute('role', 'menuitem'); menu.append(a) }
+  for (const [t, h] of [['Chat', '/app'], ['Dashboard', '/dashboard'], ['Policies', '/policies']].filter(x => x[1] !== location.pathname)) { const a = mk('a', '', t); a.href = h; a.setAttribute('role', 'menuitem'); menu.append(a) }
   if (c.auth) { menu.append(document.createElement('hr')); const b = mk('button', '', 'Sign out'); b.setAttribute('role', 'menuitem'); b.onclick = AUTH.logout; menu.append(b) }
   const toggle = open => { menu.hidden = !open; av.setAttribute('aria-expanded', String(open)) }
   av.onclick = e => { e.stopPropagation(); toggle(menu.hidden) }
