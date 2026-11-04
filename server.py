@@ -33,6 +33,13 @@ def public_config():
 _users = {}  # token -> (expiry, user); Supabase is asked at most once a minute per token
 
 
+def _jwt_exp(tok):
+    try:
+        return json.loads(base64.urlsafe_b64decode(tok.split(".")[1] + "==")).get("exp", 0)
+    except Exception:
+        return 0
+
+
 def user_of(headers):
     """The signed-in user, verified by Supabase Auth. With no Supabase configured the app runs open as a single local user."""
     if not store.configured():
@@ -51,8 +58,10 @@ def user_of(headers):
         print(f"session rejected by Supabase: HTTP {e.code} {e.read()[:160]!r}", file=sys.stderr, flush=True)
         return None
     except Exception as e:
+        if hit and _jwt_exp(tok) > time.time():  # Supabase unreachable: keep a session we already verified until its token expires
+            return hit[1]
         raise ConnectionError(f"Could not reach Supabase to check your session: {e}")
-    _users[tok] = (time.time() + 60, u)
+    _users[tok] = (time.time() + 300, u)
     return u
 
 
@@ -130,7 +139,7 @@ def api(path, body, u):
                         str(body.get("rule", "")), str(body.get("reason", "")), "batch run")
         return {}
     if path == "/api/batch":
-        out = batch.run(max(1, min(int(body.get("n", 1000)), 1000)), body.get("seed"))
+        out = batch.run(max(1, min(int(body.get("n", 2000)), 2000)), body.get("seed"))
         me["batch_rules"] = {}
         for x in out["rows"]:
             if x["rule"]:
