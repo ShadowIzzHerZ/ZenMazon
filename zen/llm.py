@@ -181,6 +181,8 @@ def call_llm(messages, tools, engine="cloud"):
         return _groq(messages, tools, device=True)
     if DOWN:
         raise LLMDown("simulated outage")
+    if engine in ("gemini", "groq"):  # the person picked a provider: use only that one, no silent fallback
+        return (_gemini if engine == "gemini" else _groq)(messages, tools)
     if PROVIDER == "mock":
         return _mock(messages)
     chain = [PROVIDER] + [p for p in ("gemini", "groq") if p != PROVIDER and os.environ.get(p.upper() + "_API_KEY") and not os.environ.get("ZEN_NO_FALLBACK")]  # fall back across providers; evals pin one model

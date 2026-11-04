@@ -73,7 +73,7 @@ def api(path, body, u):
     mine = lambda: {t: q for t, q in approvals.QUEUE.items() if q.get("uid") == u["id"]}
     if path == "/api/run":
         conv = body.get("conv_id") or "default"
-        r = agent.run(body["request"], W, body.get("policy", True), history=body.get("history", [])[-12:], engine="device" if body.get("engine") == "device" else "cloud")
+        r = agent.run(body["request"], W, body.get("policy", True), history=body.get("history", [])[-12:], engine=body.get("engine") if body.get("engine") in ("device", "gemini", "groq") else "cloud")
         RUNS.append(r)
         if r.get("token") in approvals.QUEUE:
             approvals.QUEUE[r["token"]].update(conv=conv, uid=u["id"])
@@ -96,8 +96,12 @@ def api(path, body, u):
         return {"status": rec["status"], "run": run}
     if path == "/api/me":
         return dict(email=u["email"])
+    if path == "/api/batch/decide":
+        store.log_audit(u, "human_approved" if body.get("approve") else "human_rejected", "batch", str(body.get("tool", "")), {"id": body.get("id"), "text": str(body.get("text", ""))[:200]},
+                        str(body.get("rule", "")), str(body.get("reason", "")), "batch run")
+        return {}
     if path == "/api/batch":
-        return batch.run(max(1, min(int(body.get("n", 500)), 1000)), body.get("seed"))
+        return batch.run(max(1, min(int(body.get("n", 1000)), 1000)), body.get("seed"))
     if path == "/api/down":
         llm.DOWN = body["down"]
         return {"down": llm.DOWN}
@@ -120,7 +124,7 @@ def api(path, body, u):
     if path == "/api/audit":
         return store.audit(u)
     if path == "/api/state":
-        return dict(down=llm.DOWN, storage=dict(supabase=store.configured(), error=store.STATUS["error"]), provider=llm.PROVIDER, cloud_model={"gemini": llm.MODEL, "groq": llm.GROQ_MODEL}.get(llm.PROVIDER, "offline demo model"), device=llm.device_status(), runs=RUNS[-10:], user=dict(email=u["email"]), approvals=[{k: v for k, v in q.items() if k not in ("world", "ctx", "uid")} for q in mine().values()],
+        return dict(down=llm.DOWN, storage=dict(supabase=store.configured(), error=store.STATUS["error"]), provider=llm.PROVIDER, cloud_model={"gemini": llm.MODEL, "groq": llm.GROQ_MODEL}.get(llm.PROVIDER, "offline demo model"), cloud=dict(gemini=dict(model=llm.MODEL, ready=bool(os.environ.get("GEMINI_API_KEY"))), groq=dict(model=llm.GROQ_MODEL, ready=bool(os.environ.get("GROQ_API_KEY")))), device=llm.device_status(), runs=RUNS[-10:], user=dict(email=u["email"]), approvals=[{k: v for k, v in q.items() if k not in ("world", "ctx", "uid")} for q in mine().values()],
                     world=dict(claims=W.claims, payments=W.payments, bookings=W.bookings, form=W.form, docs=W.docs, effects=W.effects),
                     eval=next((json.load(open(f)) for f in ("eval_results.json", "eval_results.groq.json") if os.path.exists(f)), None))
 
@@ -139,9 +143,11 @@ class H(BaseHTTPRequestHandler):
             except ConnectionError as e:
                 return self._send(503, {"error": str(e)})
             return self._send(200, api(self.path, {}, u)) if u else self._send(401, {"error": "Sign in required"})
-        if self.path in ("/auth.js", "/theme.css", "/theme.js"):
+        if self.path in ("/auth.js", "/theme.css", "/theme.js", "/batchrun.js"):
             return self._send(200, open(self.path[1:], "rb").read(), "text/css" if self.path.endswith("css") else "text/javascript")
-        page = {"/app": "chat.html", "/dashboard": "dashboard.html", "/batch": "batch.html"}.get(self.path.split("?")[0], "landing.html")
+        if self.path.split("?")[0] == "/batch":  # the batch run now lives on the dashboard
+            self.send_response(302); self.send_header("Location", "/dashboard"); self.end_headers(); return
+        page = {"/app": "chat.html", "/dashboard": "dashboard.html"}.get(self.path.split("?")[0], "landing.html")
         self._send(200, open(page, "rb").read(), "text/html")
 
     def do_POST(self):
