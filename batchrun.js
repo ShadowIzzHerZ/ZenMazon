@@ -11,8 +11,11 @@
 .brleg{display:flex;gap:32px;flex-wrap:wrap}.brleg .n{font-size:28px;line-height:36px;font-weight:600;font-variant-numeric:tabular-nums}.brleg .k{display:flex;align-items:center;gap:8px;color:var(--fg2);font-size:13px}.brleg .k i{width:8px;height:8px;border-radius:2px}
 .brhuman{margin:20px 0 0;padding:16px;border:1.5px solid var(--warn);border-radius:12px;background:var(--card);display:flex;gap:16px;align-items:center;flex-wrap:wrap}
 .brhuman .t{flex:1;min-width:240px}.brhuman .h{font-size:12px;font-weight:500;color:var(--warn)}.brhuman .x{margin-top:4px}.brhuman .w{font-size:13px;color:var(--fg2);margin-top:4px}
-.brhuman .a{display:flex;gap:8px}.brhuman .btn{height:36px;padding:0 16px}
+.brhuman .a{display:flex;gap:8px}.brhuman .aiout{flex-basis:100%;font-size:13px;line-height:18px;color:var(--fg2)}.brhuman .aiout:empty{display:none}.brhuman .aiout b{color:var(--fg);font-weight:500}.brhuman .btn{height:36px;padding:0 16px}
 .brlive{margin-top:20px;border-top:1px solid var(--line)}
+/* fixed-size areas while a run is going, so nothing above the graph changes height and the page never shifts */
+.br.has .brlive{height:540px;overflow:hidden}.br.has #brSum{min-height:104px}.br.run #brHuman{min-height:148px}#brHuman{display:flow-root}
+.br *,.br{overflow-anchor:none}
 .brtr{display:grid;grid-template-columns:72px minmax(0,1fr) 112px 160px minmax(0,1.1fr);gap:16px;align-items:center;min-height:48px;padding:8px 0;border-bottom:1px solid var(--line)}
 .brtr.h{min-height:40px;font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--fg2)}
 .brtr .id{color:var(--fg3);font-size:12px}.brtr .amt{text-align:right;font-variant-numeric:tabular-nums}.brtr .why{font-size:13px;color:var(--fg2)}.brtr .why kbd{margin-right:8px}
@@ -30,7 +33,7 @@
 @media(max-width:900px){.brtr{grid-template-columns:1fr auto;gap:4px 16px}.brtr.h{display:none}.brtr .id,.brtr .why{grid-column:1/-1}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important}}
 </style>`)
-  mount.innerHTML = `<section class=br>
+  mount.innerHTML = `<section class=br id=brSec>
 <div class=brc><button class="btn primary" id=brRun>Run</button><button class=btn id=brStop hidden>Stop</button>
 <label class=sw><input type=checkbox id=brPause checked>Pause for human approval</label><span class=note id=brNote></span></div>
 <div id=brSum></div><div id=brHuman></div><div class=brlive id=brLive></div><div id=brRes></div></section><div class=brtoasts id=brToasts aria-hidden=true></div>`
@@ -63,9 +66,10 @@
   }
   function ask(r) {
     waiting = r
-    $('brHuman').innerHTML = `<div class=brhuman role=alert><div class=t><div class=h>Human intervention needed</div><div class=x>${esc(r.text)}</div><div class=w><kbd>${r.rule}</kbd>${esc(r.reason)}</div></div><div class=a><button class="btn primary" id=brYes>Approve</button><button class=btn id=brNo>Reject</button></div></div>`
+    $('brHuman').innerHTML = `<div class=brhuman role=alert><div class=t><div class=h>Human intervention needed</div><div class=x>${esc(r.text)}</div><div class=w><kbd>${r.rule}</kbd>${esc(r.reason)}</div></div><div class=a><button class="btn primary" id=brYes>Approve</button><button class=btn id=brNo>Reject</button><button class=btn id=brAsk>Ask AI</button></div><div class=aiout id=brAI></div></div>`
     const done = ok => { settle(r, ok); waiting = null; $('brHuman').innerHTML = ''; summary() }
-    $('brYes').onclick = () => done(true); $('brNo').onclick = () => done(false); $('brYes').focus()
+    $('brAsk').onclick = async () => { const o = $('brAI'); o.innerHTML = '<b>Ask AI</b> Thinking'; const a = await fetch('/api/advise', { method: 'POST', body: JSON.stringify({ tool: r.tool, text: r.text, rule: r.rule, reason: r.reason, args: { amount: r.amount } }) }).then(x => x.json()).catch(e => ({ error: String(e) })); o.innerHTML = '<b>Ask AI</b> ' + esc(a.advice || a.error || 'No answer') }
+    $('brYes').onclick = () => done(true); $('brNo').onclick = () => done(false); $('brYes').focus({ preventScroll: true })
   }
   function tick() {
     if (waiting) return
@@ -88,7 +92,7 @@
     if ($('brMore')) $('brMore').onclick = () => { shown += 100; table() }
   }
   function finish(stopped) {
-    clearInterval(timer); waiting = null; $('brHuman').innerHTML = ''
+    clearInterval(timer); waiting = null; $('brHuman').innerHTML = ''; $('brSec').classList.remove('run'); $('brRes').style.minHeight = ''
     $('brStop').hidden = true; $('brRun').disabled = false; $('brRun').textContent = 'Run again'
     const bad = seen().filter(r => r.expected === 'deny'), caught = bad.filter(r => r.verdict === 'deny').length
     $('brNote').textContent = (stopped ? 'Stopped' : 'Finished') + ' at ' + k + ' of ' + D.n + '. Seed ' + D.seed
@@ -97,7 +101,10 @@
     $('brRes').onclick = e => { const b = e.target.closest('[data-t]'); if (b) { tab = b.dataset.t; shown = 60; table() } }
   }
   $('brRun').onclick = async () => {
-    $('brRun').disabled = true; $('brRun').textContent = 'Starting'; $('brRes').innerHTML = ''; $('brLive').innerHTML = ''; $('brHuman').innerHTML = ''
+    $('brRun').disabled = true; $('brRun').textContent = 'Starting'
+    $('brSec').classList.add('has', 'run')
+    $('brRes').style.minHeight = $('brRes').offsetHeight + 'px'  // keep the old results' height until the run ends so the page below does not jump
+    $('brRes').innerHTML = ''; $('brLive').innerHTML = ''; $('brHuman').innerHTML = ''
     D = await fetch('/api/batch', { method: 'POST', body: JSON.stringify({ n: 2000 }) }).then(r => r.json()).catch(e => ({ error: String(e) }))
     if (D.error) { $('brNote').textContent = D.error; $('brRun').disabled = false; $('brRun').textContent = 'Run'; return }
     k = 0; waiting = null; c = { through: 0, revoked: 0, human: 0, decided: 0 }
