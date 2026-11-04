@@ -23,7 +23,7 @@ const AUTH = (() => {
     config, get, token,
     login: async (email, password) => keep(await call('token?grant_type=password', { email, password })),
     signup: async (email, password) => { const d = await call('signup', { email, password }); return d.access_token ? keep(d) : null },
-    logout: () => { put(null); location.href = '/' },
+    logout: () => { put(null); if (location.pathname !== '/') location.href = '/' },
   }
 })()
 
@@ -38,7 +38,7 @@ window.fetch = async (url, opts = {}) => {
     opts = { ...opts, headers: { ...opts.headers, Authorization: 'Bearer ' + t } }
   }
   const r = await _fetch(url, opts)
-  if (r.status === 401 && c.auth) { AUTH.logout(); return new Promise(() => {}) }
+  if (r.status === 401 && c.auth) { AUTH.logout(); if (location.pathname !== '/') return new Promise(() => {}) }
   return r
 }
 
