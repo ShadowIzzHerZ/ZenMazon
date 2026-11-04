@@ -37,7 +37,7 @@ def flag_duplicate(w, vendor, amount, date):
 
 def submit_claim(w, employee, amount, vendor, date, description):
     w.claims.append(dict(employee=employee, amount=amount, vendor=vendor, date=date, description=description))
-    records.save(getattr(w, "owner", None), "claim", dict(vendor=vendor, amount=amount, date=date, description=description, summary=f"Claim of Rs {amount:g} at {vendor}"))
+    records.save(getattr(w, "owner", None), "claim", dict(by=getattr(w, "decided_by", None), vendor=vendor, amount=amount, date=date, description=description, summary=f"Claim of Rs {amount:g} at {vendor}"))
     return {"status": "submitted", "claim_id": len(w.claims), "summary": f"Claim of Rs {amount:g} at {vendor} submitted"}
 
 
@@ -46,7 +46,7 @@ def send_payment(w, recipient, amount, reason):
     why = f" for {reason}" if reason and reason != "not given" else ""
     ref = payments.pay(recipient, amount, reason) if getattr(w, "owner", None) else None  # evals and batch runs have no owner and never call out
     note = "" if not ref else f" (Razorpay test order {ref['id']})" if "id" in ref else f" (Razorpay test order failed: {ref['error']})"
-    records.save(getattr(w, "owner", None), "payment", dict(recipient=recipient, amount=amount, reason=reason, order=(ref or {}).get("id"), summary=f"Paid Rs {amount:g} to {recipient}{why}"))
+    records.save(getattr(w, "owner", None), "payment", dict(by=getattr(w, "decided_by", None), recipient=recipient, amount=amount, reason=reason, order=(ref or {}).get("id"), summary=f"Paid Rs {amount:g} to {recipient}{why}"))
     return {"status": "paid", "summary": f"Paid Rs {amount:g} to {recipient}{why}{note}", **({"order_id": ref["id"]} if ref and "id" in ref else {})}
 
 

@@ -72,7 +72,9 @@ def resume(token, ok, world, by="human"):
     """Human decided. Run the approved action (or report the rejection), then let the agent carry on."""
     rec = approvals.decide(token, ok, by)
     c = rec["call"]
+    world.decided_by = by  # recorded with the executed claim or payment, so the dashboard can say who approved it
     out = execute(world, c, True) if ok else {"error": "rejected by human"}
+    world.decided_by = None
     step = dict(call=c, verdict="allow" if ok else "deny", rule=rec["rule"], reason=f"Approved by {'AI' if by == 'ai' else 'human'}" if ok else f"Rejected by {'AI' if by == 'ai' else 'human'}", result=out)
     ctx = rec.get("ctx")
     res = dict(request=rec["ctx"]["request"] if ctx else "", policy=True, trace=[step], status="done", mode="normal", engine=ctx.get("engine", "cloud") if ctx else "cloud")
