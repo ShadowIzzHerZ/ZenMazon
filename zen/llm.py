@@ -9,7 +9,7 @@ if os.path.exists(".env"):  # KEY=value lines; keeps the key out of per-tab shel
         k, _, v = line.strip().partition("=")
         if v and not k.startswith("#"):
             os.environ.setdefault(k, v.strip("\"'"))
-PROVIDER = os.environ.get("ZEN_LLM") or ("gemini" if os.environ.get("GEMINI_API_KEY") else "groq" if os.environ.get("GROQ_API_KEY") else "mock")
+PROVIDER = os.environ.get("ZEN_LLM") or ("groq" if os.environ.get("GROQ_API_KEY") else "gemini" if os.environ.get("GEMINI_API_KEY") else "mock")
 MODELS = [os.environ["ZEN_GEMINI_MODEL"]] if os.environ.get("ZEN_GEMINI_MODEL") else ["gemini-3.1-flash-lite", "gemini-3-flash-preview"]
 MODEL = MODELS[0]  # cheapest first; the pricier model is only a fallback when the cheap one is overloaded
 
