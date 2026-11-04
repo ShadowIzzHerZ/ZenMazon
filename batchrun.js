@@ -16,7 +16,9 @@
 .brtr{display:grid;grid-template-columns:72px minmax(0,1fr) 112px 160px minmax(0,1.1fr);gap:16px;align-items:center;min-height:48px;padding:8px 0;border-bottom:1px solid var(--line)}
 .brtr.h{min-height:40px;font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--fg2)}
 .brtr .id{color:var(--fg3);font-size:12px}.brtr .amt{text-align:right;font-variant-numeric:tabular-nums}.brtr .why{font-size:13px;color:var(--fg2)}.brtr .why kbd{margin-right:8px}
-.brtr.new{animation:brin .25s var(--ease) both}@keyframes brin{from{opacity:0;transform:translateY(-6px)}}
+.brw{display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows .45s var(--ease),opacity .45s var(--ease)}
+.brw.open{grid-template-rows:1fr;opacity:1}.brw.close{grid-template-rows:0fr;opacity:0}.brw>.in{overflow:hidden;min-height:0}
+@media(prefers-reduced-motion:reduce){.brw{transition:none}}
 .brtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-top:32px;flex-wrap:wrap}
 .brtabs button{height:40px;padding:0 16px;border:0;border-bottom:2px solid transparent;background:none;color:var(--fg2);font:500 14px/1 Inter,system-ui,sans-serif;cursor:pointer;margin-bottom:-1px}
 .brtabs button[aria-selected=true]{color:var(--fg);border-color:var(--accent)}.brtabs b{font-weight:400;color:var(--fg3);margin-left:6px}
@@ -70,8 +72,12 @@
     if (k >= D.n) return finish()
     const r = D.rows[k++]
     if (r.verdict === 'allow') c.through++; else if (r.verdict === 'deny') c.revoked++; else { c.human++; toast(r) }
-    const row = document.createElement('div'); row.className = 'brtr new'; row.innerHTML = rowHTML(r); r.el = row
-    $('brLive').prepend(row); while ($('brLive').children.length > 10) $('brLive').lastChild.remove()
+    const row = document.createElement('div'); row.className = 'brtr'; row.innerHTML = rowHTML(r); r.el = row
+    const wrap = document.createElement('div'); wrap.className = 'brw'; wrap.innerHTML = '<div class=in></div>'; wrap.firstChild.append(row)
+    $('brLive').prepend(wrap)  // the new row opens from zero height, so the rows below slide down instead of jumping
+    requestAnimationFrame(() => requestAnimationFrame(() => wrap.classList.add('open')))
+    const live = [...$('brLive').children].filter(x => !x.classList.contains('close'))
+    for (const old of live.slice(10)) { old.classList.add('close'); setTimeout(() => old.remove(), 500) }
     if (r.verdict === 'approve' && $('brPause').checked) ask(r)
     summary()
   }
