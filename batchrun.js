@@ -39,7 +39,7 @@
 <div id=brSum></div><div id=brHuman></div><div class=brlive id=brLive></div><div id=brRes></div></section><div class=brtoasts id=brToasts aria-hidden=true></div>`
   const $ = id => document.getElementById(id), esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
   const IC = { allow: '<svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>', approve: '<svg viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.5v.01"/></svg>', deny: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>' }
-  const LAB = { allow: 'Went through', approve: 'Needs approval', deny: 'Revoked', yes: 'Human approved', no: 'Human rejected' }
+  const LAB = { allow: 'Went through', approve: 'Needs approval', deny: 'Revoked', yes: 'Human approved', no: 'Human rejected', yesAI: 'Accepted using AI', noAI: 'Rejected using AI' }
   const rs = n => n == null ? '' : 'Rs ' + Number(n).toLocaleString('en-IN')
   let D, k, c, timer, waiting, tab, shown
   const TABS = [['deny', 'Revoked'], ['approve', 'Asked a human'], ['allow', 'Went through'], ['miss', 'Missed']]
@@ -59,16 +59,18 @@
     const d = document.createElement('div'); d.className = 'brtoast'; d.innerHTML = `<span class=m>Needs approval</span><span class=t>${esc(r.text)}</span>`; box.appendChild(d)
     setTimeout(() => { d.classList.add('out'); setTimeout(() => d.remove(), 300) }, 3500)
   }
-  function settle(r, ok) {  // a human decided: update counters, the feed row and the audit log
+  function settle(r, ok, by) {  // a human decided: update counters, the feed row and the audit log
     c.decided++; ok ? c.through++ : c.revoked++
-    const el = r.el; if (el) { const p = el.querySelector('.verdict'); p.className = 'verdict ' + (ok ? 'allow' : 'deny'); p.innerHTML = IC[ok ? 'allow' : 'deny'] + LAB[ok ? 'yes' : 'no'] }
-    fetch('/api/batch/decide', { method: 'POST', body: JSON.stringify({ id: r.id, text: r.text, tool: r.tool, rule: r.rule, reason: r.reason, approve: ok }) }).catch(() => {})
+    const el = r.el; if (el) { const p = el.querySelector('.verdict'); p.className = 'verdict ' + (ok ? 'allow' : 'deny'); p.innerHTML = IC[ok ? 'allow' : 'deny'] + LAB[(ok ? 'yes' : 'no') + (by === 'ai' ? 'AI' : '')] }
+    fetch('/api/batch/decide', { method: 'POST', body: JSON.stringify({ id: r.id, text: r.text, tool: r.tool, rule: r.rule, reason: r.reason, approve: ok, by }) }).catch(() => {})
   }
   function ask(r) {
     waiting = r
     $('brHuman').innerHTML = `<div class=brhuman role=alert><div class=t><div class=h>Human intervention needed</div><div class=x>${esc(r.text)}</div><div class=w><kbd>${r.rule}</kbd>${esc(r.reason)}</div></div><div class=a><button class="btn primary" id=brYes>Approve</button><button class=btn id=brNo>Reject</button><button class=btn id=brAsk>Ask AI</button></div><div class=aiout id=brAI></div></div>`
-    const done = ok => { settle(r, ok); waiting = null; $('brHuman').innerHTML = ''; summary() }
-    $('brAsk').onclick = async () => { const o = $('brAI'); o.innerHTML = '<b>Ask AI</b> Thinking'; const a = await fetch('/api/advise', { method: 'POST', body: JSON.stringify({ tool: r.tool, text: r.text, rule: r.rule, reason: r.reason, args: { amount: r.amount } }) }).then(x => x.json()).catch(e => ({ error: String(e) })); o.innerHTML = '<b>Ask AI</b> ' + esc(a.advice || a.error || 'No answer') }
+    const done = (ok, by) => { settle(r, ok, by); waiting = null; $('brHuman').innerHTML = ''; summary() }
+    $('brAsk').onclick = async () => { const o = $('brAI'); o.innerHTML = '<b>Ask AI</b> Thinking'; const a = await fetch('/api/advise', { method: 'POST', body: JSON.stringify({ tool: r.tool, text: r.text, rule: r.rule, reason: r.reason, args: { amount: r.amount } }) }).then(x => x.json()).catch(e => ({ error: String(e) })); o.innerHTML = '<b>Ask AI</b> ' + esc(a.advice || a.error || 'No answer')
+      if (a.decision === 'approve' || a.decision === 'reject') { $('brYes').disabled = $('brNo').disabled = $('brAsk').disabled = true; await new Promise(x => setTimeout(x, 1200)); done(a.decision === 'approve', 'ai') }
+      else if (a.advice) o.innerHTML += ' <b>The AI is not sure, so the decision is yours.</b>' }
     $('brYes').onclick = () => done(true); $('brNo').onclick = () => done(false); $('brYes').focus({ preventScroll: true })
   }
   function tick() {

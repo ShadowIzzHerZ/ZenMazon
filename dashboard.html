@@ -65,7 +65,7 @@ D.forEach((d,i)=>{const y=i*rh+8,b=rate(d,false),g=rate(d,true)
 s+=`<text x=0 y=${y+28}>${d}</text><rect x=${pad} y=${y} width=${Math.max(bw(b),2)} height=20 rx=4 fill="var(--fg3)" opacity=.5 /><text x=${pad+bw(b)+8} y=${y+15}>${pct(b)}</text>`
 s+=`<rect x=${pad} y=${y+24} width=${Math.max(bw(g),2)} height=20 rx=4 fill="var(--accent)" /><text x=${pad+bw(g)+8} y=${y+39}>${pct(g)}</text>`})
 return s+'</svg>'}
-const KIND={blocked:['blocked','Blocked by policy'],needs_approval:['pending','Needs approval'],human_approved:['approved','Approved by human'],human_rejected:['rejected','Rejected by human'],allowed:['ran','Ran']}
+const KIND={blocked:['blocked','Blocked by policy'],needs_approval:['pending','Needs approval'],human_approved:['approved','Approved by human'],ai_approved:['approved','Accepted using AI'],ai_rejected:['rejected','Rejected using AI'],human_rejected:['rejected','Rejected by human'],allowed:['ran','Ran']}
 const when=t=>new Date(t).toLocaleString([], {dateStyle:'medium', timeStyle:'short'})
 const COL={ok:'var(--ok)',bad:'var(--bad)',warn:'var(--warn)'};let live=false,S={ok:[0],bad:[0],warn:[0]}
 let cur=null,tgt=null,raf=0
@@ -87,8 +87,8 @@ let d=`M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;for(let i=1;i<pts.lengt
 if(pts.length>1)d+=` L${lx.toFixed(1)},${ly.toFixed(1)}`
 o+=`<path d="${d}" fill=none stroke="${COL[k]}" stroke-width=2.5 stroke-linejoin=round stroke-linecap=round /><circle cx=${lx.toFixed(1)} cy=${ly.toFixed(1)} r=4 fill="${COL[k]}" /><text x=${(lx+8).toFixed(1)} y=${(ly+4).toFixed(1)} style="fill:${COL[k]};font-weight:500">${Math.round(cur.ly[k])}</text>`}
 $('oc').innerHTML=o+'</svg>'}
-function fromAudit(a){const s={ok:[0],bad:[0],warn:[0]},ev=[...a].reverse().filter(x=>['allowed','human_approved','blocked','human_rejected','needs_approval'].includes(x.kind));let c={ok:0,bad:0,warn:0}
-ev.forEach(x=>{if(x.kind=='allowed'||x.kind=='human_approved')c.ok++;else if(x.kind=='blocked'||x.kind=='human_rejected')c.bad++;else c.warn++;for(const k in c)s[k].push(c[k])})
+function fromAudit(a){const s={ok:[0],bad:[0],warn:[0]},ev=[...a].reverse().filter(x=>['allowed','human_approved','ai_approved','blocked','human_rejected','ai_rejected','needs_approval'].includes(x.kind));let c={ok:0,bad:0,warn:0}
+ev.forEach(x=>{if(x.kind=='allowed'||x.kind=='human_approved'||x.kind=='ai_approved')c.ok++;else if(x.kind=='blocked'||x.kind=='human_rejected'||x.kind=='ai_rejected')c.bad++;else c.warn++;for(const k in c)s[k].push(c[k])})
 S=s;$('ocap').textContent=ev.length?`Your chats: ${ev.length} events from the audit log, oldest to newest. Run the batch to watch it grow live.`:'No activity yet. Send a chat message or press Run and the lines start growing.';lines(S,Math.max(ev.length,10),true)}
 document.addEventListener('zen:batch',e=>{const{k,n,c}=e.detail;if(k==0)S={ok:[0],bad:[0],warn:[0]};live=true
 const p={ok:c.through,bad:c.revoked,warn:c.human};for(const q in p){if(S[q].length>k)S[q][k]=p[q];else S[q].push(p[q])}

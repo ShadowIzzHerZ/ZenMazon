@@ -87,7 +87,7 @@ const col=$('col');function add(h,c){const d=document.createElement('div');d.cla
 const lab={allow:'Allowed',deny:'Blocked',approve:'Needs approval'},IC={allow: `<svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>`, approve: `<svg viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.5v.01"/></svg>`, deny: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>`}
 const show=v=>esc(JSON.stringify(v)).slice(0,160)
 const PEND={}
-async function askAI(t){const p=PEND[t],o=$('ai'+t);if(!p||!o)return;o.innerHTML='<b>Ask AI</b> Thinking';const r=await post('/api/advise',{...p,engine});o.innerHTML='<b>Ask AI</b> '+esc(r.advice||r.error||'No answer')}
+async function askAI(t){const p=PEND[t],o=$('ai'+t);if(!p||!o)return;o.innerHTML='<b>Ask AI</b> Thinking';const r=await post('/api/advise',{...p,engine});o.innerHTML='<b>Ask AI</b> '+esc(r.advice||r.error||'No answer');if(r.decision=='approve'||r.decision=='reject'){await new Promise(x=>setTimeout(x,1200));dec(t,r.decision=='approve',r.advice)}else if(r.advice)o.innerHTML+=' <b>The AI is not sure, so the decision is yours.</b>'}
 function render(r,d){let h=''
 if(r.mode=='safe'){const why=/429/.test(r.error||'')?'has hit its rate limit':/503/.test(r.error||'')?'is overloaded':/404/.test(r.error||'')?'is set to a model that no longer exists':'is not responding';h+=`<div class=note>The AI model ${why}, so Zen is in safe mode. Nothing runs on its own.${r.trace.length?' The action below is a draft for a human.':''}<div class=args>${esc((r.error||'').slice(0,140))}</div></div>`}
 if(r.policy===false)h+='<div class=note>The policy layer is off. The agent can do anything.</div>'
@@ -102,11 +102,11 @@ return h}
 async function send(t){if(!t.trim())return;if(!title)title=t;col.querySelector('.empty')?.remove();add(esc(t),'u');const w=add('<span class=decided>Working</span>','a')
 const r=await post('/api/run',{request:t,policy:true,history:hist,conv_id:conv,title,engine});w.innerHTML=r.error&&!r.trace?esc(r.error):render(r);$('log').scrollTop=1e9;active=true;modelLabel()
 hist.push({role:'user',content:t},{role:'assistant',content:replyText(r)});recents()}
-async function dec(t,ok){const box=$('ap'+t),note=($('nt'+t)?.value||'').trim();box.className='actions';box.innerHTML=`<span class=decided>${ok?'Approving':'Rejecting'}</span>`
-const r=await post('/api/approve',{token:t,approve:ok,note})
+async function dec(t,ok,ai){const box=$('ap'+t),note=ai||($('nt'+t)?.value||'').trim();box.className='actions';box.innerHTML=`<span class=decided>${ai?(ok?'Accepting using AI':'Rejecting using AI'):ok?'Approving':'Rejecting'}</span>`
+const r=await post('/api/approve',{token:t,approve:ok,note:ai?'Ask AI: '+ai.slice(0,260):note,by:ai?'ai':'human'})
 if(r.error){box.innerHTML=`<span class=decided>${esc(r.error)}</span>`;return}
-box.innerHTML=`<span class=decided>Human ${r.status}. ${ok?'Action executed':'Action not executed'}${note?`. Reason: ${esc(note)}`:''}</span>`
-const f=$('f'+t);f.className='final'+(ok?'':' deny');f.querySelector('span').textContent=ok?'Approved and executed':'Rejected by human'
+box.innerHTML=`<span class=decided>${ai?(ok?'Accepted using AI':'Rejected using AI'):'Human '+r.status}. ${ok?'Action executed':'Action not executed'}${note?`. ${ai?'AI said':'Reason'}: ${esc(note)}`:''}</span>`
+const f=$('f'+t);f.className='final'+(ok?'':' deny');f.querySelector('span').textContent=ai?(ok?'Accepted using AI':'Rejected using AI'):ok?'Approved and executed':'Rejected by human'
 const more=r.run.trace.slice(1),done=r.run.trace[0].result?.summary;const say=r.run.message||(ok&&done);if(more.length||r.run.status=='pending_approval')add(render({...r.run,trace:more}),'a');else if(say)add(`<div class=msg>${esc(say)}</div>`,'a');$('log').scrollTop=1e9}
 document.addEventListener('keydown',e=>{if(e.metaKey||e.ctrlKey||e.altKey||e.target.matches('input,textarea'))return;const k=e.key.toLowerCase();if(k!='a'&&k!='r')return;const p=[...document.querySelectorAll('.approval')].pop();p&&p.querySelector(k=='a'?'.btn.primary':'.btn:not(.primary)').click()})
 const hist=[];let conv=crypto.randomUUID(),title=''
