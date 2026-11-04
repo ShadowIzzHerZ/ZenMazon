@@ -67,20 +67,31 @@ return s+'</svg>'}
 const KIND={blocked:['blocked','Blocked by policy'],needs_approval:['pending','Needs approval'],human_approved:['approved','Approved by human'],human_rejected:['rejected','Rejected by human'],allowed:['ran','Ran']}
 const when=t=>new Date(t).toLocaleString([], {dateStyle:'medium', timeStyle:'short'})
 const COL={ok:'var(--ok)',bad:'var(--bad)',warn:'var(--warn)'};let live=false,S={ok:[0],bad:[0],warn:[0]}
-function lines(s,xmax){const W=1000,H=260,L=44,R=56,T=12,B=28,m=Math.max(xmax,1),top=Math.max(5,...['ok','bad','warn'].map(k=>s[k][s[k].length-1])),ymax=Math.ceil(top/5)*5
+let cur=null,tgt=null,raf=0
+function lines(s,xmax,instant){const last=k=>s[k][s[k].length-1],top=Math.max(5,last('ok'),last('bad'),last('warn'))
+tgt={s,xmax:Math.max(xmax,1),ymax:Math.ceil(top/5)*5,lx:s.ok.length-1,ly:{ok:last('ok'),bad:last('bad'),warn:last('warn')}}
+if(!cur||instant){cur={xmax:tgt.xmax,ymax:tgt.ymax,lx:tgt.lx,ly:{...tgt.ly}};paint();return}
+if(!raf)raf=requestAnimationFrame(step)}
+function step(){raf=0;let moving=false;const e=(a,b)=>{const d=b-a;if(Math.abs(d)<.004*Math.max(1,Math.abs(b)))return b;moving=true;return a+d*.14}  // ease toward the new values so the lines glide
+cur.xmax=e(cur.xmax,tgt.xmax);cur.ymax=e(cur.ymax,tgt.ymax);cur.lx=e(cur.lx,tgt.lx);for(const k in cur.ly)cur.ly[k]=e(cur.ly[k],tgt.ly[k])
+paint();if(moving)raf=requestAnimationFrame(step)}
+function paint(){const W=1000,H=260,L=44,R=56,T=12,B=28,m=cur.xmax,ymax=cur.ymax
 const X=i=>L+i/m*(W-L-R),Y=v=>T+(1-v/ymax)*(H-T-B)
 let o=`<svg viewBox="0 0 ${W} ${H}" width=100% role=img aria-label="Cumulative approved, declined and human-approval-needed counts">`
 ;[0,.5,1].forEach(t=>{const v=Math.round(ymax*t),y=Y(v);o+=`<line x1=${L} x2=${W-R} y1=${y} y2=${y} stroke="var(--line)"/><text x=${L-8} y=${y+4} text-anchor=end>${v}</text>`})
 ;[0,.5,1].forEach(t=>{o+=`<text x=${X(m*t)} y=${H-6} text-anchor=${t==0?'start':t==1?'end':'middle'}>${Math.round(m*t)}</text>`})
-for(const k of ['ok','bad','warn']){const a=s[k],pts=a.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' '),e=a.length-1
-o+=`<polyline points="${pts}" fill=none stroke="${COL[k]}" stroke-width=2.5 stroke-linejoin=round stroke-linecap=round /><circle cx=${X(e)} cy=${Y(a[e])} r=4 fill="${COL[k]}" /><text x=${X(e)+8} y=${Y(a[e])+4} style="fill:${COL[k]};font-weight:500">${a[e]}</text>`}
+for(const k of ['ok','bad','warn']){const hist=tgt.s[k].slice(0,-1),n=Math.max(1,Math.ceil(hist.length/240));const pts=[];for(let i=0;i<hist.length;i+=n)pts.push([X(i),Y(hist[i])])
+const lx=X(cur.lx),ly=Y(cur.ly[k]);if(hist.length&&pts[pts.length-1][0]>=lx)pts.pop();pts.push([lx,ly])
+let d=`M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;for(let i=1;i<pts.length-1;i++){const mx=(pts[i][0]+pts[i+1][0])/2,my=(pts[i][1]+pts[i+1][1])/2;d+=` Q${pts[i][0].toFixed(1)},${pts[i][1].toFixed(1)} ${mx.toFixed(1)},${my.toFixed(1)}`}
+if(pts.length>1)d+=` L${lx.toFixed(1)},${ly.toFixed(1)}`
+o+=`<path d="${d}" fill=none stroke="${COL[k]}" stroke-width=2.5 stroke-linejoin=round stroke-linecap=round /><circle cx=${lx.toFixed(1)} cy=${ly.toFixed(1)} r=4 fill="${COL[k]}" /><text x=${(lx+8).toFixed(1)} y=${(ly+4).toFixed(1)} style="fill:${COL[k]};font-weight:500">${Math.round(cur.ly[k])}</text>`}
 $('oc').innerHTML=o+'</svg>'}
 function fromAudit(a){const s={ok:[0],bad:[0],warn:[0]},ev=[...a].reverse().filter(x=>['allowed','human_approved','blocked','human_rejected','needs_approval'].includes(x.kind));let c={ok:0,bad:0,warn:0}
 ev.forEach(x=>{if(x.kind=='allowed'||x.kind=='human_approved')c.ok++;else if(x.kind=='blocked'||x.kind=='human_rejected')c.bad++;else c.warn++;for(const k in c)s[k].push(c[k])})
-S=s;$('ocap').textContent=ev.length?`Your chats: ${ev.length} events from the audit log, oldest to newest. Run the batch to watch it grow live.`:'No activity yet. Send a chat message or press Run and the lines start growing.';lines(S,Math.max(ev.length,10))}
+S=s;$('ocap').textContent=ev.length?`Your chats: ${ev.length} events from the audit log, oldest to newest. Run the batch to watch it grow live.`:'No activity yet. Send a chat message or press Run and the lines start growing.';lines(S,Math.max(ev.length,10),true)}
 document.addEventListener('zen:batch',e=>{const{k,n,c}=e.detail;if(k==0)S={ok:[0],bad:[0],warn:[0]};live=true
 const p={ok:c.through,bad:c.revoked,warn:c.human};for(const q in p){if(S[q].length>k)S[q][k]=p[q];else S[q].push(p[q])}
-$('ocap').textContent=`Batch run: scenario ${k} of ${n}. Approved includes human approvals, declined includes human rejections.`;lines(S,Math.max(k,20))})
+$('ocap').textContent=`Batch run: scenario ${k} of ${n}. Approved includes human approvals, declined includes human rejections.`;lines(S,Math.max(k,20),k<=1)})
 async function audit(){const a=await fetch('/api/audit').then(r=>r.json()).catch(()=>[]);if(!live)fromAudit(a)
 $('audit').innerHTML=a.length?a.slice(0,60).map(x=>{const[k,l]=KIND[x.kind]||['pending',x.kind];const why=x.args&&(x.args.reason||x.args.description);return`<div class=row style="grid-template-columns:150px 1fr auto"><div class="st ${k}"><i></i>${l}</div><div><div>${x.tool}${x.rule?` <kbd>${x.rule}</kbd>`:''}</div><div class=mono>${esc(JSON.stringify(x.args||{})).slice(0,90)}${why?` · reason: ${esc(why)}`:''}${x.note?` · note: ${esc(x.note)}`:''}</div></div><div class=mono>${when(x.created_at)}</div></div>`}).join(''):'<div class=empty>Nothing logged yet</div>'}
 async function records(s){const r=await fetch('/api/records').then(x=>x.json()).catch(()=>({items:[]}))
