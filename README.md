@@ -38,7 +38,7 @@ touch .env   # optional: add keys, see below
 python3 server.py
 ```
 
-Open http://localhost:8000 for the chat and http://localhost:8000/dashboard for the evaluation view.
+Open http://localhost:8000 for the landing page, http://localhost:8000/app for the chat and http://localhost:8000/dashboard for the evaluation view. With Supabase configured you must sign up or log in first.
 
 Create a `.env` file in the project root:
 
@@ -50,6 +50,10 @@ SUPABASE_KEY=...
 ```
 
 Every line is optional. With no keys, Zen uses a scripted offline model so the whole app still runs. With a Gemini key it prefers Gemini, with a Groq key it falls back to Groq, and if both fail it drops to safe mode: nothing runs on its own, and the single extracted action is drafted for a human. The `.env` file is gitignored.
+
+The Batch run page (`/batch`) generates 500 synthetic Indian corporate transactions, some with planted problems, and checks each one against the policy engine. It makes no model calls. A few planted problems are deliberately outside the rules' reach, for example alcohol named as "Old Monk rum", so the page also reports what the rules missed.
+
+The chat has a model switch. Cloud API uses Gemini or Groq. On-device uses a small model served by Ollama on your own machine (default `qwen2.5:3b`, change it with `ZEN_DEVICE_MODEL`); it needs `ollama serve` running and the model pulled. The policy engine checks both the same way.
 
 Run the evaluation and the tests:
 
@@ -99,7 +103,9 @@ zen/
   store.py      audit log and chat history (local file, mirrored to Supabase)
   cases.py      the 30 test cases
   evals.py      evaluation harness
-server.py       stdlib HTTP server
+server.py       stdlib HTTP server, verifies Supabase sessions
+landing.html    hero page with log in and sign up
+auth.js         Supabase Auth client, token handling, account chip
 chat.html       chat UI with per-call verdicts, approval cards, Recents
 dashboard.html  results, approvals and audit log
 test_policy.py  one firing case and one clean case per rule
@@ -114,7 +120,16 @@ Writes always go to a local file. When `SUPABASE_URL` and `SUPABASE_KEY` are set
 - `zen_runs` holds chat history.
 - `zen_audit` is the append-only audit log: policy blocks, approval requests, and human approvals and rejections with their notes.
 
-The server uses a public anon key with permissive row-level security. That is fine for demo data. For anything real, use a service key and tighten the policies.
+Accounts use Supabase Auth (email and password). The browser holds the session and sends its access token on every `/api` call. The server verifies the token with Supabase, gives each user their own fake backends, and writes to Supabase with that user's token, so row-level security does the enforcement:
+
+- Both tables have a `user_id` column that defaults to `auth.uid()`.
+- Signed-in users can only select and insert rows where `user_id` is their own. `zen_runs` also allows updating your own rows.
+- `zen_audit` has no update or delete policy, so it is append-only.
+- The `anon` role has no access to either table.
+
+`SUPABASE_KEY` must be the anon (publishable) key. The server serves it to the browser and refuses to if it is a service key. By default Supabase asks new users to confirm their email, which can be switched off under Authentication, Providers, Email.
+
+Rows written before accounts existed have no `user_id` and are hidden from everyone.
 
 ## Limitations
 
