@@ -51,7 +51,7 @@ SUPABASE_KEY=...
 
 Every line is optional. With no keys, Zen uses a scripted offline model so the whole app still runs. With a Gemini key it prefers Gemini, with a Groq key it falls back to Groq, and if both fail it drops to safe mode: nothing runs on its own, and the single extracted action is drafted for a human. The `.env` file is gitignored.
 
-The Batch run page (`/batch`) generates 500 synthetic Indian corporate transactions, some with planted problems, and checks each one against the policy engine. It makes no model calls. A few planted problems are deliberately outside the rules' reach, for example alcohol named as "Old Monk rum", so the page also reports what the rules missed.
+The Batch run section on the dashboard runs 1,000 planned synthetic Indian corporate transactions, some with planted problems, and checks each one against the policy engine. It makes no model calls. A few planted problems are deliberately outside the rules' reach, for example alcohol named as "Old Monk rum", so the page also reports what the rules missed.
 
 The chat has a model switch. Cloud API uses Gemini or Groq. On-device uses a small model served by Ollama on your own machine (default `qwen2.5:3b`, change it with `ZEN_DEVICE_MODEL`); it needs `ollama serve` running and the model pulled. The policy engine checks both the same way.
 
