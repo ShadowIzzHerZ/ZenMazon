@@ -17,13 +17,13 @@ def execute(world, call, approved):
     return out
 
 
-def run(request, world, policy_on=True, approver=None, history=()):
+def run(request, world, policy_on=True, approver=None, history=(), engine="cloud"):
     """approver(token)->True/False resolves approvals inline (evals); None pauses the run for a human."""
     past = [{"role": h["role"], **({"content": h["content"]} if h["role"] == "user" else {"text": h["content"]})}
             for h in history if h.get("role") in ("user", "assistant") and h.get("content")]
     # policy grounding checks (vendor, amount, recipient) look at everything the user said in this conversation
     world.request = "\n".join([m["content"] for m in past if m["role"] == "user"] + [request])
-    res = dict(request=request, policy=policy_on, trace=[], status="done", mode="normal")
+    res = dict(request=request, policy=policy_on, trace=[], status="done", mode="normal", engine=engine)
     return _drive(res, past + [{"role": "user", "content": request}], world, policy_on, approver, [], time.time())
 
 
@@ -34,7 +34,7 @@ def _drive(res, msgs, world, policy_on, approver, queue, t0, last=False):
             if not queue and last:  # after a human decision, no extra model call just to word a reply
                 break
             if not queue:
-                out = llm.call_llm(msgs, TOOLS)
+                out = llm.call_llm(msgs, TOOLS, res.get("engine", "cloud"))
                 calls = out["calls"]
                 if not calls:
                     res["message"] = out.get("text") or ""
@@ -53,7 +53,7 @@ def _drive(res, msgs, world, policy_on, approver, queue, t0, last=False):
                     step["token"] = tok
                     ok = approver(tok) if approver else None
                     if ok is None:  # pause; resume() continues from this saved state
-                        approvals.QUEUE[tok]["ctx"] = dict(msgs=msgs, queue=queue, policy_on=policy_on, request=res["request"])
+                        approvals.QUEUE[tok]["ctx"] = dict(msgs=msgs, queue=queue, policy_on=policy_on, request=res["request"], engine=res.get("engine", "cloud"))
                         res.update(status="pending_approval", token=tok)
                         return _done(res, t0)
                     approvals.decide(tok, ok, by="auto-approver")
@@ -75,7 +75,7 @@ def resume(token, ok, world):
     out = execute(world, c, True) if ok else {"error": "rejected by human"}
     step = dict(call=c, verdict="allow" if ok else "deny", rule=rec["rule"], reason="Approved by human" if ok else "Rejected by human", result=out)
     ctx = rec.get("ctx")
-    res = dict(request=rec["ctx"]["request"] if ctx else "", policy=True, trace=[step], status="done", mode="normal")
+    res = dict(request=rec["ctx"]["request"] if ctx else "", policy=True, trace=[step], status="done", mode="normal", engine=ctx["engine"] if ctx else "cloud")
     if not ctx:  # safe-mode draft: nothing to continue
         return res | dict(latency=0)
     ctx["msgs"].append({"role": "tool", "name": c["name"], "content": out})

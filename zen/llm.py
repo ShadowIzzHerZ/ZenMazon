@@ -1,6 +1,7 @@
 """call_llm(messages, tools) -> {"calls": [{"name","args"}]}. Providers: gemini (REST), mock (deterministic, naive).
 DOWN simulates a Gemini outage; the agent then drops to safe mode (see agent.py)."""
 import datetime, hashlib, json, os, re, time, urllib.error, urllib.request
+from . import net
 
 DOWN = False  # flipped by the dashboard "Gemini down" switch
 if os.path.exists(".env"):  # KEY=value lines; keeps the key out of per-tab shell state
@@ -87,7 +88,7 @@ def _gemini(messages, tools):
         req = urllib.request.Request(url, data, {"Content-Type": "application/json", "x-goog-api-key": key})
         for i in range(2):  # two quick tries per model, then fall to the next one
             try:
-                parts = json.load(urllib.request.urlopen(req, timeout=30))["candidates"][0]["content"].get("parts", [])
+                parts = json.load(net.urlopen(req, timeout=30))["candidates"][0]["content"].get("parts", [])
                 break
             except urllib.error.HTTPError as e:
                 err = f"{model} HTTP {e.code}: {e.read().decode()[:160]}"
@@ -111,8 +112,21 @@ def _gemini(messages, tools):
 GROQ_MODEL = os.environ.get("ZEN_GROQ_MODEL", "openai/gpt-oss-20b")
 
 
-def _groq(messages, tools):
-    """OpenAI-style chat completions on Groq."""
+OLLAMA_MODEL = os.environ.get("ZEN_DEVICE_MODEL", "qwen2.5:3b")  # the on-device model, served by Ollama on this Mac
+
+
+def device_status():
+    """Is the on-device model ready? Ollama must be running and have the model pulled."""
+    try:
+        tags = json.load(net.urlopen(urllib.request.Request("http://localhost:11434/api/tags"), timeout=1))
+        return dict(ready=any(m["name"] == OLLAMA_MODEL or m["name"].startswith(OLLAMA_MODEL + ":") for m in tags.get("models", [])), model=OLLAMA_MODEL)
+    except Exception:
+        return dict(ready=False, model=OLLAMA_MODEL)
+
+
+def _groq(messages, tools, device=False):
+    """OpenAI-style chat completions on Groq, or on the local Ollama server when device=True."""
+    tag, model = ("ollama", OLLAMA_MODEL) if device else ("groq", GROQ_MODEL)
     msgs, ids = [{"role": "system", "content": SYSTEM.format(today=datetime.date.today().isoformat())}], []
     for i, m in enumerate(messages):
         if m["role"] == "user":
@@ -128,26 +142,28 @@ def _groq(messages, tools):
     decl = [{"type": "function", "function": {"name": n, "description": t["desc"], "parameters": {
         "type": "object", "properties": {k: {"type": v} for k, v in t["params"].items()}, "required": list(t["params"])}}} for n, t in tools.items()]
     def body(temp):
-        return json.dumps({"model": GROQ_MODEL, "messages": msgs, "tools": decl, "temperature": temp, **({"reasoning_effort": "low"} if "gpt-oss" in GROQ_MODEL else {})}, sort_keys=True).encode()
+        return json.dumps({"model": model, "messages": msgs, "tools": decl, "temperature": temp, **({"reasoning_effort": "low"} if "gpt-oss" in model else {})}, sort_keys=True).encode()
     data = body(0)
-    cache = f".llm_cache/{hashlib.sha256(b'groq' + data).hexdigest()}.json"
+    cache = f".llm_cache/{hashlib.sha256(tag.encode() + data).hexdigest()}.json"
     if os.path.exists(cache):
         return json.load(open(cache))
-    req = urllib.request.Request("https://api.groq.com/openai/v1/chat/completions", data,
-                                 {"Content-Type": "application/json", "Authorization": "Bearer " + os.environ["GROQ_API_KEY"], "User-Agent": "zen/1.0"})
-    err = "groq: no attempt"
+    req = urllib.request.Request("http://localhost:11434/v1/chat/completions" if device else "https://api.groq.com/openai/v1/chat/completions", data,
+                                 {"Content-Type": "application/json", "Authorization": "Bearer " + ("ollama" if device else os.environ["GROQ_API_KEY"]), "User-Agent": "zen/1.0"})
+    err = f"{tag}: no attempt"
     for i in range(3):
         try:
-            msg = json.load(urllib.request.urlopen(req, timeout=30))["choices"][0]["message"]
+            msg = json.load(net.urlopen(req, timeout=120 if device else 30))["choices"][0]["message"]
             break
         except urllib.error.HTTPError as e:
-            err = f"groq HTTP {e.code}: {e.read().decode()[:160]}"
+            err = f"{tag} HTTP {e.code}: {e.read().decode()[:160]}"
             if "Failed to parse tool call" in err:  # malformed tool JSON repeats at temperature 0, so add a little randomness
                 req = urllib.request.Request(req.full_url, body(0.3), req.headers)
             elif e.code not in (429, 500, 503):
                 raise LLMDown(err)
         except Exception as e:
-            err = f"groq {e!r}"
+            err = f"{tag} {e!r}"
+            if device:  # Ollama is not running: do not wait through retries
+                raise LLMDown(err + " (is Ollama running?)")
         time.sleep(1 + i)
     else:
         raise LLMDown(err)
@@ -158,7 +174,11 @@ def _groq(messages, tools):
     return out
 
 
-def call_llm(messages, tools):
+def call_llm(messages, tools, engine="cloud"):
+    if engine == "device":
+        if DOWN:
+            raise LLMDown("simulated outage")
+        return _groq(messages, tools, device=True)
     if DOWN:
         raise LLMDown("simulated outage")
     if PROVIDER == "mock":
@@ -179,7 +199,7 @@ def extract_json(prompt, model=os.environ.get("ZEN_OLLAMA_MODEL", "llama3.2:3b")
         try:
             req = urllib.request.Request("http://localhost:11434/api/generate", json.dumps(
                 {"model": model, "prompt": prompt, "format": "json", "stream": False, "options": {"temperature": 0}}).encode())
-            return json.loads(json.load(urllib.request.urlopen(req, timeout=60))["response"])
+            return json.loads(json.load(net.urlopen(req, timeout=60))["response"])
         except Exception:
             continue
     return None
