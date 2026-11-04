@@ -59,7 +59,7 @@ Run the evaluation and the tests:
 
 ```bash
 python3 -m zen.evals              # 30 cases, policy off and on
-python3 -m unittest test_policy -v
+python3 -m unittest test_policy test_backends -v
 ```
 
 Set `ZEN_LLM=mock` for the offline model, `ZEN_NO_FALLBACK=1` to pin a single provider, and `ZEN_WORKERS=1` to avoid rate limits. If any evaluation run fails because of a quota or network error, the results are written to a `.partial.json` file with a warning instead of overwriting real results.
@@ -130,6 +130,14 @@ Accounts use Supabase Auth (email and password). The browser holds the session a
 `SUPABASE_KEY` must be the anon (publishable) key. The server serves it to the browser and refuses to if it is a service key. By default Supabase asks new users to confirm their email, which can be switched off under Authentication, Providers, Email.
 
 Rows written before accounts existed have no `user_id` and are hidden from everyone.
+
+## Hosting, payments sandbox and DynamoDB
+
+**Hosting.** The server needs no build step. It reads `PORT` from the environment, so it runs as is on Render or AWS App Runner. `Dockerfile` and `render.yaml` are included. Set the secrets from `.env` in the host's dashboard. Chat history, the audit log and login stay on Supabase.
+
+**Payments sandbox.** Set `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` to Razorpay test keys. After a payment is approved, Zen also creates an order for that amount in your Razorpay test dashboard, and the order id appears in the reply. Live keys (`rzp_live_`) are refused. Without keys, payments stay simulated.
+
+**DynamoDB.** Claims and payments that actually run are also written to a DynamoDB table named `zen_records` (partition key `user_id`, sort key `sk`, on-demand billing), and the dashboard lists them under Executed actions. AWS credentials come from `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, or the default profile in `~/.aws/credentials`. Use an IAM user limited to that one table rather than root keys. Set `ZEN_DDB=off` to switch it off. Local mode without Supabase only writes if `ZEN_DDB=on`. The eval and batch runs never write.
 
 ## Limitations
 

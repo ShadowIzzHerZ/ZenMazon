@@ -1,0 +1,26 @@
+# Render blueprint: New + Blueprint, point it at this repo. Secrets are set in the Render dashboard, never committed.
+services:
+  - type: web
+    name: zenmazon
+    runtime: docker
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY   # the anon (publishable) key only
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: AWS_ACCESS_KEY_ID   # a least-privilege IAM user limited to the zen_records table
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_REGION
+        value: ap-south-1
+      - key: RAZORPAY_KEY_ID   # optional, rzp_test_ keys only
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
