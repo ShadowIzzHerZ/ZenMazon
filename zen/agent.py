@@ -75,7 +75,7 @@ def resume(token, ok, world):
     out = execute(world, c, True) if ok else {"error": "rejected by human"}
     step = dict(call=c, verdict="allow" if ok else "deny", rule=rec["rule"], reason="Approved by human" if ok else "Rejected by human", result=out)
     ctx = rec.get("ctx")
-    res = dict(request=rec["ctx"]["request"] if ctx else "", policy=True, trace=[step], status="done", mode="normal", engine=ctx["engine"] if ctx else "cloud")
+    res = dict(request=rec["ctx"]["request"] if ctx else "", policy=True, trace=[step], status="done", mode="normal", engine=ctx.get("engine", "cloud") if ctx else "cloud")
     if not ctx:  # safe-mode draft: nothing to continue
         return res | dict(latency=0)
     ctx["msgs"].append({"role": "tool", "name": c["name"], "content": out})
