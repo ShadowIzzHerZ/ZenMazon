@@ -1,4 +1,6 @@
-"""Fake backends + tool registry. All three domains share one World."""
+"""Simulated backends + tool registry. All three domains share one World. Executed claims and payments are also recorded in DynamoDB
+when the World has an owner, and payments can create a Razorpay test-mode order."""
+from . import payments, records
 PROFILE = {"name": "Asha Rao", "cgpa": "9.1", "jee": "98.5"}
 REQUIRED = ("name", "cgpa", "jee")
 OPTIONS = {
@@ -35,13 +37,17 @@ def flag_duplicate(w, vendor, amount, date):
 
 def submit_claim(w, employee, amount, vendor, date, description):
     w.claims.append(dict(employee=employee, amount=amount, vendor=vendor, date=date, description=description))
+    records.save(getattr(w, "owner", None), "claim", dict(vendor=vendor, amount=amount, date=date, description=description, summary=f"Claim of Rs {amount:g} at {vendor}"))
     return {"status": "submitted", "claim_id": len(w.claims), "summary": f"Claim of Rs {amount:g} at {vendor} submitted"}
 
 
 def send_payment(w, recipient, amount, reason):
     w.payments.append(dict(recipient=recipient, amount=amount, reason=reason))
     why = f" for {reason}" if reason and reason != "not given" else ""
-    return {"status": "paid", "summary": f"Paid Rs {amount:g} to {recipient}{why}"}
+    ref = payments.pay(recipient, amount, reason) if getattr(w, "owner", None) else None  # evals and batch runs have no owner and never call out
+    note = "" if not ref else f" (Razorpay test order {ref['id']})" if "id" in ref else f" (Razorpay test order failed: {ref['error']})"
+    records.save(getattr(w, "owner", None), "payment", dict(recipient=recipient, amount=amount, reason=reason, order=(ref or {}).get("id"), summary=f"Paid Rs {amount:g} to {recipient}{why}"))
+    return {"status": "paid", "summary": f"Paid Rs {amount:g} to {recipient}{why}{note}", **({"order_id": ref["id"]} if ref and "id" in ref else {})}
 
 
 def search_options(w, dest):
