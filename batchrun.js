@@ -9,12 +9,13 @@
 .brsplit{display:flex;height:12px;border-radius:6px;overflow:hidden;background:var(--raised);margin:20px 0 12px}.brsplit i{display:block;height:100%;transition:width .3s}
 .brsplit .ok{background:var(--ok)}.brsplit .warn{background:var(--warn)}.brsplit .bad{background:var(--bad)}
 .brleg{display:flex;gap:32px;flex-wrap:wrap}.brleg .n{font-size:28px;line-height:36px;font-weight:600;font-variant-numeric:tabular-nums}.brleg .k{display:flex;align-items:center;gap:8px;color:var(--fg2);font-size:13px}.brleg .k i{width:8px;height:8px;border-radius:2px}
-.brhuman{margin:20px 0 0;padding:16px;border:1.5px solid var(--warn);border-radius:12px;background:var(--card);display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.brhuman{position:absolute;left:0;right:0;top:16px;box-shadow:0 8px 24px rgba(30,23,27,.18);margin:0;padding:16px;border:1.5px solid var(--warn);border-radius:12px;background:var(--card);display:flex;gap:16px;align-items:center;flex-wrap:wrap}
 .brhuman .t{flex:1;min-width:240px}.brhuman .h{font-size:12px;font-weight:500;color:var(--warn)}.brhuman .x{margin-top:4px}.brhuman .w{font-size:13px;color:var(--fg2);margin-top:4px}
 .brhuman .a{display:flex;gap:8px}.brhuman .aiout{flex-basis:100%;font-size:13px;line-height:18px;color:var(--fg2)}.brhuman .aiout:empty{display:none}.brhuman .aiout b{color:var(--fg);font-weight:500}.brhuman .btn{height:36px;padding:0 16px}
 .brlive{margin-top:20px;border-top:1px solid var(--line)}
 /* fixed-size areas while a run is going, so nothing above the graph changes height and the page never shifts */
-.br.has .brlive{height:540px;overflow:hidden}.br.has #brSum{min-height:104px}.br.run #brHuman{min-height:148px}#brHuman{display:flow-root}
+.br.has .brlive{height:540px;overflow:hidden}.br.has #brSum{min-height:104px}/* the approval card floats over the top of the feed, so it takes no space of its own and leaves no gap */
+#brHuman{position:relative;height:0;z-index:6}
 .br *,.br{overflow-anchor:none}
 .brtr{display:grid;grid-template-columns:72px minmax(0,1fr) 112px 160px minmax(0,1.1fr);gap:16px;align-items:center;min-height:48px;padding:8px 0;border-bottom:1px solid var(--line)}
 .brtr.h{min-height:40px;font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--fg2)}
