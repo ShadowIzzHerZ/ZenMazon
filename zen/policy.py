@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 from .tools import TOOLS, OPTIONS, REQUIRED
 
-ALCOHOL = re.compile(r"\b(beer|wine|vodka|whisk(e)?y|alcohol|cocktail|bar tab|liquor)\b", re.I)
+ALCOHOL = re.compile(r"\b(beers?|wines?|vodka|whisk(e)?y|whiskies|alcohol|cocktails?|bar tab|liquor)\b", re.I)
 ALLOWED_DOCS = {"marksheet.pdf", "id_proof.pdf", "recommendation.pdf"}
 
 
