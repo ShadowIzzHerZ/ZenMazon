@@ -44,6 +44,7 @@ pre{margin:0;white-space:pre-wrap;font-size:12px;line-height:16px;color:var(--fg
 <div class=card><h2>Policy violations by domain</h2><p class=cap>Share of test cases where a forbidden action actually ran</p><div class=legend><span><i style="background:var(--fg3);opacity:.5"></i>Without policy</span><span><i style="background:var(--accent)"></i>With policy</span></div><div id=chart></div></div>
 <div class="card list"><h2>Approvals</h2><p class=cap>Every risky action and who decided</p><div id=aq></div></div>
 </div>
+<div class="card list" style="margin-bottom:16px"><h2>Executed actions</h2><p class=cap id=recnote>Claims and payments that actually ran, kept in DynamoDB</p><div id=rec></div></div>
 <div class="card list" style="margin-bottom:16px"><h2>Audit log</h2><p class=cap id=store>Every policy block, approval request and human decision</p><div id=audit></div></div>
 <div class=card><h2>Backend state</h2><p class=cap>What the fake backends hold right now</p><pre id=world></pre></div>
 </div>
@@ -68,9 +69,12 @@ const KIND={blocked:['blocked','Blocked by policy'],needs_approval:['pending','N
 const when=t=>new Date(t).toLocaleString([], {dateStyle:'medium', timeStyle:'short'})
 async function audit(){const a=await fetch('/api/audit').then(r=>r.json()).catch(()=>[])
 $('audit').innerHTML=a.length?a.map(x=>{const[k,l]=KIND[x.kind]||['pending',x.kind];const why=x.args&&(x.args.reason||x.args.description);return`<div class=row style="grid-template-columns:150px 1fr auto"><div class="st ${k}"><i></i>${l}</div><div><div>${x.tool}${x.rule?` <kbd>${x.rule}</kbd>`:''}</div><div class=mono>${esc(JSON.stringify(x.args||{})).slice(0,90)}${why?` · reason: ${esc(why)}`:''}${x.note?` · note: ${esc(x.note)}`:''}</div></div><div class=mono>${when(x.created_at)}</div></div>`}).join(''):'<div class=empty>Nothing logged yet</div>'}
+async function records(s){const r=await fetch('/api/records').then(x=>x.json()).catch(()=>({items:[]}))
+const b=s.backends||{};$('recnote').textContent='Claims and payments that actually ran. '+(r.enabled?`Stored in DynamoDB (${r.table})`+(b.dynamodb_error?`, last write failed: ${b.dynamodb_error.slice(0,80)}`:''):'DynamoDB is off, so nothing is stored beyond this session')+'. Payments: '+(b.payments=='razorpay-test'?'Razorpay test mode':'simulated')
+$('rec').innerHTML=r.items.length?r.items.map(i=>`<div class=row style="grid-template-columns:90px 1fr auto"><div class="st ${i.kind=='payment'?'approved':'ran'}"><i></i>${i.kind=='payment'?'Payment':'Claim'}</div><div><div>${esc(i.summary||'')}</div><div class=mono>${esc(i.order||i.description||i.reason||'')}</div></div><div class=mono>${when(i.created_at)}</div></div>`).join(''):'<div class=empty>Nothing yet</div>'}
 async function load(){const s=await fetch('/api/state').then(r=>r.json());$('down').checked=s.down
 $('store').textContent='Every policy block, approval request and human decision. Stored in '+(s.storage.supabase?'Supabase'+(s.storage.error?' (last write failed: '+s.storage.error.slice(0,80)+')':''):'a local file (Supabase not connected)');audit()
-$('world').textContent=JSON.stringify(s.world,null,1)
+$('world').textContent=JSON.stringify(s.world,null,1);records(s)
 $('aq').innerHTML=s.approvals.length?s.approvals.map(a=>`<div class=row><kbd>${a.rule}</kbd><div><div>${a.call.name}</div><div class=mono>${esc(JSON.stringify(a.call.args)).slice(0,80)}</div></div>${a.status=='pending'?`<div><button class="btn primary" onclick="decide('${a.token}',true)">Approve</button> <button class=btn onclick="decide('${a.token}',false)">Reject</button></div>`:`<div class="st ${a.status}"><i></i>${a.status}</div>`}</div>`).join(''):'<div class=empty>No approvals yet</div>'
 if(s.eval){const b=s.eval.baseline,g=s.eval.governed
 $('sub').textContent=`${g.n} test cases, model ${s.eval.provider||s.provider}`
