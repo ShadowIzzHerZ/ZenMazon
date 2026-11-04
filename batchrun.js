@@ -1,4 +1,4 @@
-// Batch run: 1,000 planned Indian corporate scenarios go through the policy engine two per second. Each one goes through,
+// Batch run: 2,000 planned Indian corporate scenarios go through the policy engine two per second. Each one goes through,
 // is revoked, or stops the run and asks a human. Mounts into <div id=batch> on the dashboard.
 (() => {
   const mount = document.getElementById('batch')
@@ -92,7 +92,7 @@
   }
   $('brRun').onclick = async () => {
     $('brRun').disabled = true; $('brRun').textContent = 'Starting'; $('brRes').innerHTML = ''; $('brLive').innerHTML = ''; $('brHuman').innerHTML = ''
-    D = await fetch('/api/batch', { method: 'POST', body: JSON.stringify({ n: 1000 }) }).then(r => r.json()).catch(e => ({ error: String(e) }))
+    D = await fetch('/api/batch', { method: 'POST', body: JSON.stringify({ n: 2000 }) }).then(r => r.json()).catch(e => ({ error: String(e) }))
     if (D.error) { $('brNote').textContent = D.error; $('brRun').disabled = false; $('brRun').textContent = 'Run'; return }
     k = 0; waiting = null; c = { through: 0, revoked: 0, human: 0, decided: 0 }
     $('brRun').textContent = 'Running'; $('brStop').hidden = false; $('brNote').textContent = ''
