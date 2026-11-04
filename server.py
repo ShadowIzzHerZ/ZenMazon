@@ -159,7 +159,7 @@ def api(path, body, u):
                 r["status"] = "expired"
         return runs
     if path == "/api/audit":
-        return store.audit(u)
+        return store.audit(u, 300)
     if path == "/api/state":
         return dict(down=llm.DOWN, storage=dict(supabase=store.configured(), error=store.STATUS["error"]), backends=dict(dynamodb=records.enabled(u["id"]), dynamodb_error=records.STATUS["error"], payments=payments.mode()), provider=llm.PROVIDER, cloud_model={"gemini": llm.MODEL, "groq": llm.GROQ_MODEL}.get(llm.PROVIDER, "offline demo model"), cloud=dict(gemini=dict(model=llm.MODEL, ready=bool(os.environ.get("GEMINI_API_KEY"))), groq=dict(model=llm.GROQ_MODEL, ready=bool(os.environ.get("GROQ_API_KEY")))), device=llm.device_status(), runs=RUNS[-10:], user=dict(email=u["email"]), approvals=[{k: v for k, v in q.items() if k not in ("world", "ctx", "uid")} for q in mine().values()],
                     world=dict(claims=W.claims, payments=W.payments, bookings=W.bookings, form=W.form, docs=W.docs, effects=W.effects),

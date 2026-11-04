@@ -28,8 +28,7 @@
 @media(max-width:900px){.brtr{grid-template-columns:1fr auto;gap:4px 16px}.brtr.h{display:none}.brtr .id,.brtr .why{grid-column:1/-1}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important}}
 </style>`)
-  mount.innerHTML = `<section class=br><h2>Batch run</h2>
-<p class=cap>1,000 planned Indian corporate scenarios: expense claims, payments and travel bookings, some with planted problems. Run feeds them to the policy engine two a second. Each one goes through, gets revoked, or stops the run and asks for a human. No AI model is called.</p>
+  mount.innerHTML = `<section class=br>
 <div class=brc><button class="btn primary" id=brRun>Run</button><button class=btn id=brStop hidden>Stop</button>
 <label class=sw><input type=checkbox id=brPause checked>Pause for human approval</label><span class=note id=brNote></span></div>
 <div id=brSum></div><div id=brHuman></div><div class=brlive id=brLive></div><div id=brRes></div></section><div class=brtoasts id=brToasts aria-hidden=true></div>`
@@ -43,6 +42,7 @@
   const inTab = (r, t) => t === 'miss' ? (r.expected === 'deny' && r.verdict !== 'deny') : r.verdict === t
 
   function summary() {
+    document.dispatchEvent(new CustomEvent('zen:batch', { detail: { k, n: D.n, c: { ...c } } }))  // the dashboard chart follows the run
     const n = D.n, w = c.through, v = c.revoked, h = c.human - c.decided
     $('brSum').innerHTML = `<div class=brsplit><i class=ok style="width:${w / n * 100}%"></i><i class=warn style="width:${h / n * 100}%"></i><i class=bad style="width:${v / n * 100}%"></i></div>
 <div class=brleg><div><div class=k><i style="background:var(--ok)"></i>Went through</div><div class=n>${w}</div></div><div><div class=k><i style="background:var(--bad)"></i>Revoked</div><div class=n>${v}</div></div>
