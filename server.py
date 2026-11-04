@@ -130,6 +130,13 @@ def api(path, body, u):
             approvals.QUEUE[run["token"]].update(conv=conv, uid=u["id"])
         log_steps(u, conv, run, skip_first=True)
         return {"status": rec["status"], "run": run}
+    if path == "/api/advise":
+        prompt = (f"Action: {str(body.get('tool', ''))[:60]} {json.dumps(body.get('args', {}))[:400]}\nRequest: {str(body.get('text', ''))[:300]}\n"
+                  f"Rule that flagged it: {str(body.get('rule', ''))[:20]} {str(body.get('reason', ''))[:200]}\nShould the human approve or reject this?")
+        try:
+            return dict(advice=llm.advise(prompt, body.get("engine", "cloud")) or "No answer came back.")
+        except llm.LLMDown as e:
+            return dict(error="The AI could not answer: " + str(e)[:120])
     if path == "/api/records":
         return dict(enabled=records.enabled(u["id"]), table=records.TABLE, items=records.recent(u["id"]))
     if path == "/api/me":

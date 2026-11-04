@@ -205,3 +205,40 @@ def extract_json(prompt, model=os.environ.get("ZEN_OLLAMA_MODEL", "llama3.2:3b")
         except Exception:
             continue
     return None
+
+
+ADVISOR = ("You are a careful finance-controls reviewer. A policy rule has flagged an action and a human must decide whether to approve or reject it. "
+           "Reply in at most three short sentences. Start with Approve, Reject or Unsure, then give the reason in plain words. "
+           "Use only the facts given and never invent details. Amounts are in Indian rupees.")
+
+
+def advise(prompt, engine="cloud"):
+    """One plain answer from the chosen model, used by the Ask AI button. It only advises: the human still decides."""
+    if DOWN:
+        raise LLMDown("simulated outage")
+    pick = engine if engine in ("gemini", "groq", "device") else ("gemini" if PROVIDER == "gemini" else "groq" if PROVIDER == "groq" else "mock")
+    if pick == "mock":
+        return "Unsure. The offline demo model cannot review this. Read the rule that flagged it and decide yourself."
+    if pick == "gemini":
+        body = json.dumps({"contents": [{"role": "user", "parts": [{"text": prompt}]}], "systemInstruction": {"parts": [{"text": ADVISOR}]},
+                           "generationConfig": {"temperature": 0.2, "thinkingConfig": {"thinkingLevel": "low"}}}).encode()
+        err = "gemini: no attempt"
+        for model in MODELS:
+            req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent", body,
+                                         {"Content-Type": "application/json", "x-goog-api-key": os.environ["GEMINI_API_KEY"]})
+            try:
+                parts = json.load(net.urlopen(req, timeout=30))["candidates"][0]["content"].get("parts", [])
+                return " ".join(p["text"] for p in parts if p.get("text") and not p.get("thought")).strip()
+            except Exception as e:
+                err = f"{model} {getattr(e, 'code', '')} {e!r}"[:200]
+        raise LLMDown(err)
+    device = pick == "device"
+    model = OLLAMA_MODEL if device else GROQ_MODEL
+    body = json.dumps({"model": model, "messages": [{"role": "system", "content": ADVISOR}, {"role": "user", "content": prompt}], "temperature": 0.2,
+                       **({"reasoning_effort": "low"} if "gpt-oss" in model else {}), **({} if device else {"max_tokens": 500})}).encode()
+    req = urllib.request.Request("http://localhost:11434/v1/chat/completions" if device else "https://api.groq.com/openai/v1/chat/completions", body,
+                                 {"Content-Type": "application/json", "Authorization": "Bearer " + ("ollama" if device else os.environ.get("GROQ_API_KEY", "")), "User-Agent": "zen/1.0"})
+    try:
+        return (json.load(net.urlopen(req, timeout=120 if device else 30))["choices"][0]["message"].get("content") or "").strip()
+    except Exception as e:
+        raise LLMDown(f"{'ollama' if device else 'groq'} {e!r}"[:200])
